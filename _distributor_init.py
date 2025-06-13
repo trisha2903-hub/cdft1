@@ -1,22 +1,18 @@
+""" Distributor init file
 
-'''Helper to preload vcomp140.dll and msvcp140.dll to prevent
-"not found" errors.
+Distributors: you can replace the contents of this file with your own custom
+code to support particular distributions of SciPy.
 
-Once vcomp140.dll and msvcp140.dll are
-preloaded, the namespace is made available to any subsequent
-vcomp140.dll and msvcp140.dll. This is
-created as part of the scripts that build the wheel.
-'''
+For example, this is a good place to put any checks for hardware requirements
+or BLAS/LAPACK library initialization.
 
+The SciPy standard source distribution will not put code in this file beyond
+the try-except import of `_distributor_init_local` (which is not part of a
+standard source distribution), so you can safely replace this file with your
+own version.
+"""
 
-import os
-import os.path as op
-from ctypes import WinDLL
-
-
-if os.name == "nt":
-    libs_path = op.join(op.dirname(__file__), ".libs")
-    vcomp140_dll_filename = op.join(libs_path, "vcomp140.dll")
-    msvcp140_dll_filename = op.join(libs_path, "msvcp140.dll")
-    WinDLL(op.abspath(vcomp140_dll_filename))
-    WinDLL(op.abspath(msvcp140_dll_filename))
+try:
+    from . import _distributor_init_local  # noqa: F401
+except ImportError:
+    pass
