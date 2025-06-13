@@ -1,130 +1,115 @@
 """
-=================================================
-Orthogonal distance regression (:mod:`scipy.odr`)
-=================================================
+==================================
+Input and output (:mod:`scipy.io`)
+==================================
 
-.. currentmodule:: scipy.odr
+.. currentmodule:: scipy.io
 
-Package Content
-===============
+SciPy has many modules, classes, and functions available to read data
+from and write data to a variety of file formats.
+
+.. seealso:: `NumPy IO routines <https://www.numpy.org/devdocs/reference/routines.io.html>`__
+
+MATLAB® files
+=============
 
 .. autosummary::
    :toctree: generated/
 
-   Data          -- The data to fit.
-   RealData      -- Data with weights as actual std. dev.s and/or covariances.
-   Model         -- Stores information about the function to be fit.
-   ODR           -- Gathers all info & manages the main fitting routine.
-   Output        -- Result from the fit.
-   odr           -- Low-level function for ODR.
+   loadmat - Read a MATLAB style mat file (version 4 through 7.1)
+   savemat - Write a MATLAB style mat file (version 4 through 7.1)
+   whosmat - List contents of a MATLAB style mat file (version 4 through 7.1)
 
-   OdrWarning    -- Warning about potential problems when running ODR.
-   OdrError      -- Error exception.
-   OdrStop       -- Stop exception.
+For low-level MATLAB reading and writing utilities, see `scipy.io.matlab`.
 
-   polynomial    -- Factory function for a general polynomial model.
-   exponential   -- Exponential model
-   multilinear   -- Arbitrary-dimensional linear model
-   unilinear     -- Univariate linear model
-   quadratic     -- Quadratic model
+IDL® files
+==========
 
-Usage information
-=================
+.. autosummary::
+   :toctree: generated/
 
-Introduction
-------------
+   readsav - Read an IDL 'save' file
 
-Why Orthogonal Distance Regression (ODR)? Sometimes one has
-measurement errors in the explanatory (a.k.a., "independent")
-variable(s), not just the response (a.k.a., "dependent") variable(s).
-Ordinary Least Squares (OLS) fitting procedures treat the data for
-explanatory variables as fixed, i.e., not subject to error of any kind.
-Furthermore, OLS procedures require that the response variables be an
-explicit function of the explanatory variables; sometimes making the
-equation explicit is impractical and/or introduces errors.  ODR can
-handle both of these cases with ease, and can even reduce to the OLS
-case if that is sufficient for the problem.
+Matrix Market files
+===================
 
-ODRPACK is a FORTRAN-77 library for performing ODR with possibly
-non-linear fitting functions. It uses a modified trust-region
-Levenberg-Marquardt-type algorithm [1]_ to estimate the function
-parameters.  The fitting functions are provided by Python functions
-operating on NumPy arrays. The required derivatives may be provided
-by Python functions as well, or may be estimated numerically. ODRPACK
-can do explicit or implicit ODR fits, or it can do OLS. Input and
-output variables may be multidimensional. Weights can be provided to
-account for different variances of the observations, and even
-covariances between dimensions of the variables.
+.. autosummary::
+   :toctree: generated/
 
-The `scipy.odr` package offers an object-oriented interface to
-ODRPACK, in addition to the low-level `odr` function.
+   mminfo - Query matrix info from Matrix Market formatted file
+   mmread - Read matrix from Matrix Market formatted file
+   mmwrite - Write matrix to Matrix Market formatted file
 
-Additional background information about ODRPACK can be found in the
-`ODRPACK User's Guide
-<https://docs.scipy.org/doc/external/odrpack_guide.pdf>`_, reading
-which is recommended.
+Unformatted Fortran files
+===============================
 
-Basic usage
------------
+.. autosummary::
+   :toctree: generated/
 
-1. Define the function you want to fit against.::
+   FortranFile - A file object for unformatted sequential Fortran files
+   FortranEOFError - Exception indicating the end of a well-formed file
+   FortranFormattingError - Exception indicating an inappropriate end
 
-       def f(B, x):
-           '''Linear function y = m*x + b'''
-           # B is a vector of the parameters.
-           # x is an array of the current x values.
-           # x is in the same format as the x passed to Data or RealData.
-           #
-           # Return an array in the same format as y passed to Data or RealData.
-           return B[0]*x + B[1]
+Netcdf
+======
 
-2. Create a Model.::
+.. autosummary::
+   :toctree: generated/
 
-       linear = Model(f)
+   netcdf_file - A file object for NetCDF data
+   netcdf_variable - A data object for the netcdf module
 
-3. Create a Data or RealData instance.::
+Harwell-Boeing files
+====================
 
-       mydata = Data(x, y, wd=1./power(sx,2), we=1./power(sy,2))
+.. autosummary::
+   :toctree: generated/
 
-   or, when the actual covariances are known::
+   hb_read   -- read H-B file
+   hb_write  -- write H-B file
 
-       mydata = RealData(x, y, sx=sx, sy=sy)
+Wav sound files (:mod:`scipy.io.wavfile`)
+=========================================
 
-4. Instantiate ODR with your data, model and initial parameter estimate.::
+.. module:: scipy.io.wavfile
 
-       myodr = ODR(mydata, linear, beta0=[1., 2.])
+.. autosummary::
+   :toctree: generated/
 
-5. Run the fit.::
+   read
+   write
+   WavFileWarning
 
-       myoutput = myodr.run()
+Arff files (:mod:`scipy.io.arff`)
+=================================
 
-6. Examine output.::
+.. module:: scipy.io.arff
 
-       myoutput.pprint()
+.. autosummary::
+   :toctree: generated/
 
-
-References
-----------
-.. [1] P. T. Boggs and J. E. Rogers, "Orthogonal Distance Regression,"
-   in "Statistical analysis of measurement error models and
-   applications: proceedings of the AMS-IMS-SIAM joint summer research
-   conference held June 10-16, 1989," Contemporary Mathematics,
-   vol. 112, pg. 186, 1990.
-
+   loadarff
+   MetaData
+   ArffError
+   ParseArffError
 """
-# version: 0.7
-# author: Robert Kern <robert.kern@gmail.com>
-# date: 2006-09-21
+# matfile read and write
+from .matlab import loadmat, savemat, whosmat
 
-from ._odrpack import *
-from ._models import *
-from . import _add_newdocs
+# netCDF file support
+from ._netcdf import netcdf_file, netcdf_variable
+
+# Fortran file support
+from ._fortran import FortranFile, FortranEOFError, FortranFormattingError
+
+from ._fast_matrix_market import mminfo, mmread, mmwrite
+from ._idl import readsav
+from ._harwell_boeing import hb_read, hb_write
 
 # Deprecated namespaces, to be removed in v2.0.0
-from . import models, odrpack
+from . import arff, harwell_boeing, idl, mmio, netcdf, wavfile
 
-__all__ = [s for s in dir()
-           if not (s.startswith('_') or s in ('odr_stop', 'odr_error'))]
+__all__ = [s for s in dir() if not s.startswith('_')]
 
 from scipy._lib._testutils import PytestTester
 test = PytestTester(__name__)
