@@ -1,23 +1,7 @@
-# .pyx is generated, so this is needed to make Cython compilation work
-_loss_cython_tree = [
-  fs.copyfile('_loss.pxd')
-]
-
-_loss_pyx = custom_target(
-  '_loss_pyx',
-  output: '_loss.pyx',
-  input: '_loss.pyx.tp',
-  command: [tempita, '@INPUT@', '-o', '@OUTDIR@'],
-  # TODO in principle this should go in py.exension_module below. This is
-  # temporary work-around for dependency issue with .pyx.tp files. For more
-  # details, see https://github.com/mesonbuild/meson/issues/13212
-  depends: _loss_cython_tree,
-)
-
 py.extension_module(
-  '_loss',
-  cython_gen.process(_loss_pyx),
-  dependencies: [openmp_dep],
-  install: true,
-  subdir: 'sklearn/_loss',
+  '_svmlight_format_fast',
+  cython_gen.process('_svmlight_format_fast.pyx'),
+  dependencies: [np_dep],
+  subdir: 'sklearn/datasets',
+  install: true
 )
