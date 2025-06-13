@@ -1,667 +1,887 @@
 """
-.. _statsrefmanual:
+========================================
+Special functions (:mod:`scipy.special`)
+========================================
 
-==========================================
-Statistical functions (:mod:`scipy.stats`)
-==========================================
+.. currentmodule:: scipy.special
 
-.. currentmodule:: scipy.stats
+Almost all of the functions below accept NumPy arrays as input
+arguments as well as single numbers. This means they follow
+broadcasting and automatic array-looping rules. Technically,
+they are `NumPy universal functions
+<https://numpy.org/doc/stable/user/basics.ufuncs.html#ufuncs-basics>`_.
+Functions which do not accept NumPy arrays are marked by a warning
+in the section description.
 
-This module contains a large number of probability distributions,
-summary and frequency statistics, correlation functions and statistical
-tests, masked statistics, kernel density estimation, quasi-Monte Carlo
-functionality, and more.
+.. seealso::
 
-Statistics is a very large area, and there are topics that are out of scope
-for SciPy and are covered by other packages. Some of the most important ones
-are:
-
-- `statsmodels <https://www.statsmodels.org/stable/index.html>`__:
-  regression, linear models, time series analysis, extensions to topics
-  also covered by ``scipy.stats``.
-- `Pandas <https://pandas.pydata.org/>`__: tabular data, time series
-  functionality, interfaces to other statistical languages.
-- `PyMC <https://docs.pymc.io/>`__: Bayesian statistical
-  modeling, probabilistic machine learning.
-- `scikit-learn <https://scikit-learn.org/>`__: classification, regression,
-  model selection.
-- `Seaborn <https://seaborn.pydata.org/>`__: statistical data visualization.
-- `rpy2 <https://rpy2.github.io/>`__: Python to R bridge.
+   `scipy.special.cython_special` -- Typed Cython versions of special functions
 
 
-Probability distributions
-=========================
+Error handling
+==============
 
-Each univariate distribution is an instance of a subclass of `rv_continuous`
-(`rv_discrete` for discrete distributions):
+Errors are handled by returning NaNs or other appropriate values.
+Some of the special function routines can emit warnings or raise
+exceptions when an error occurs. By default this is disabled, except
+for memory allocation errors, which result in an exception being raised.
+To query and control the current error handling state the following
+functions are provided.
 
 .. autosummary::
    :toctree: generated/
 
-   rv_continuous
-   rv_discrete
-   rv_histogram
+   geterr                 -- Get the current way of handling special-function errors.
+   seterr                 -- Set how special-function errors are handled.
+   errstate               -- Context manager for special-function error handling.
+   SpecialFunctionWarning -- Warning that can be emitted by special functions.
+   SpecialFunctionError   -- Exception that can be raised by special functions.
 
-Continuous distributions
-------------------------
+Available functions
+===================
 
-.. autosummary::
-   :toctree: generated/
-
-   alpha             -- Alpha
-   anglit            -- Anglit
-   arcsine           -- Arcsine
-   argus             -- Argus
-   beta              -- Beta
-   betaprime         -- Beta Prime
-   bradford          -- Bradford
-   burr              -- Burr (Type III)
-   burr12            -- Burr (Type XII)
-   cauchy            -- Cauchy
-   chi               -- Chi
-   chi2              -- Chi-squared
-   cosine            -- Cosine
-   crystalball       -- Crystalball
-   dgamma            -- Double Gamma
-   dpareto_lognorm   -- Double Pareto Lognormal
-   dweibull          -- Double Weibull
-   erlang            -- Erlang
-   expon             -- Exponential
-   exponnorm         -- Exponentially Modified Normal
-   exponweib         -- Exponentiated Weibull
-   exponpow          -- Exponential Power
-   f                 -- F (Snecdor F)
-   fatiguelife       -- Fatigue Life (Birnbaum-Saunders)
-   fisk              -- Fisk
-   foldcauchy        -- Folded Cauchy
-   foldnorm          -- Folded Normal
-   genlogistic       -- Generalized Logistic
-   gennorm           -- Generalized normal
-   genpareto         -- Generalized Pareto
-   genexpon          -- Generalized Exponential
-   genextreme        -- Generalized Extreme Value
-   gausshyper        -- Gauss Hypergeometric
-   gamma             -- Gamma
-   gengamma          -- Generalized gamma
-   genhalflogistic   -- Generalized Half Logistic
-   genhyperbolic     -- Generalized Hyperbolic
-   geninvgauss       -- Generalized Inverse Gaussian
-   gibrat            -- Gibrat
-   gompertz          -- Gompertz (Truncated Gumbel)
-   gumbel_r          -- Right Sided Gumbel, Log-Weibull, Fisher-Tippett, Extreme Value Type I
-   gumbel_l          -- Left Sided Gumbel, etc.
-   halfcauchy        -- Half Cauchy
-   halflogistic      -- Half Logistic
-   halfnorm          -- Half Normal
-   halfgennorm       -- Generalized Half Normal
-   hypsecant         -- Hyperbolic Secant
-   invgamma          -- Inverse Gamma
-   invgauss          -- Inverse Gaussian
-   invweibull        -- Inverse Weibull
-   irwinhall         -- Irwin-Hall
-   jf_skew_t         -- Jones and Faddy Skew-T
-   johnsonsb         -- Johnson SB
-   johnsonsu         -- Johnson SU
-   kappa4            -- Kappa 4 parameter
-   kappa3            -- Kappa 3 parameter
-   ksone             -- Distribution of Kolmogorov-Smirnov one-sided test statistic
-   kstwo             -- Distribution of Kolmogorov-Smirnov two-sided test statistic
-   kstwobign         -- Limiting Distribution of scaled Kolmogorov-Smirnov two-sided test statistic.
-   landau            -- Landau
-   laplace           -- Laplace
-   laplace_asymmetric    -- Asymmetric Laplace
-   levy              -- Levy
-   levy_l
-   levy_stable
-   logistic          -- Logistic
-   loggamma          -- Log-Gamma
-   loglaplace        -- Log-Laplace (Log Double Exponential)
-   lognorm           -- Log-Normal
-   loguniform        -- Log-Uniform
-   lomax             -- Lomax (Pareto of the second kind)
-   maxwell           -- Maxwell
-   mielke            -- Mielke's Beta-Kappa
-   moyal             -- Moyal
-   nakagami          -- Nakagami
-   ncx2              -- Non-central chi-squared
-   ncf               -- Non-central F
-   nct               -- Non-central Student's T
-   norm              -- Normal (Gaussian)
-   norminvgauss      -- Normal Inverse Gaussian
-   pareto            -- Pareto
-   pearson3          -- Pearson type III
-   powerlaw          -- Power-function
-   powerlognorm      -- Power log normal
-   powernorm         -- Power normal
-   rdist             -- R-distribution
-   rayleigh          -- Rayleigh
-   rel_breitwigner   -- Relativistic Breit-Wigner
-   rice              -- Rice
-   recipinvgauss     -- Reciprocal Inverse Gaussian
-   semicircular      -- Semicircular
-   skewcauchy        -- Skew Cauchy
-   skewnorm          -- Skew normal
-   studentized_range    -- Studentized Range
-   t                 -- Student's T
-   trapezoid         -- Trapezoidal
-   triang            -- Triangular
-   truncexpon        -- Truncated Exponential
-   truncnorm         -- Truncated Normal
-   truncpareto       -- Truncated Pareto
-   truncweibull_min  -- Truncated minimum Weibull distribution
-   tukeylambda       -- Tukey-Lambda
-   uniform           -- Uniform
-   vonmises          -- Von-Mises (Circular)
-   vonmises_line     -- Von-Mises (Line)
-   wald              -- Wald
-   weibull_min       -- Minimum Weibull (see Frechet)
-   weibull_max       -- Maximum Weibull (see Frechet)
-   wrapcauchy        -- Wrapped Cauchy
-
-The ``fit`` method of the univariate continuous distributions uses
-maximum likelihood estimation to fit the distribution to a data set.
-The ``fit`` method can accept regular data or *censored data*.
-Censored data is represented with instances of the `CensoredData`
-class.
+Airy functions
+--------------
 
 .. autosummary::
    :toctree: generated/
 
-   CensoredData
+   airy     -- Airy functions and their derivatives.
+   airye    -- Exponentially scaled Airy functions and their derivatives.
+   ai_zeros -- Compute `nt` zeros and values of the Airy function Ai and its derivative.
+   bi_zeros -- Compute `nt` zeros and values of the Airy function Bi and its derivative.
+   itairy   -- Integrals of Airy functions
 
 
-Multivariate distributions
---------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   multivariate_normal    -- Multivariate normal distribution
-   matrix_normal          -- Matrix normal distribution
-   dirichlet              -- Dirichlet
-   dirichlet_multinomial  -- Dirichlet multinomial distribution
-   wishart                -- Wishart
-   invwishart             -- Inverse Wishart
-   multinomial            -- Multinomial distribution
-   special_ortho_group    -- SO(N) group
-   ortho_group            -- O(N) group
-   unitary_group          -- U(N) group
-   random_correlation     -- random correlation matrices
-   multivariate_t         -- Multivariate t-distribution
-   multivariate_hypergeom -- Multivariate hypergeometric distribution
-   normal_inverse_gamma   -- Normal-inverse-gamma distribution
-   random_table           -- Distribution of random tables with given marginals
-   uniform_direction      -- Uniform distribution on S(N-1)
-   vonmises_fisher        -- Von Mises-Fisher distribution
-
-`scipy.stats.multivariate_normal` methods accept instances
-of the following class to represent the covariance.
+Elliptic functions and integrals
+--------------------------------
 
 .. autosummary::
    :toctree: generated/
 
-   Covariance             -- Representation of a covariance matrix
+   ellipj    -- Jacobian elliptic functions.
+   ellipk    -- Complete elliptic integral of the first kind.
+   ellipkm1  -- Complete elliptic integral of the first kind around `m` = 1.
+   ellipkinc -- Incomplete elliptic integral of the first kind.
+   ellipe    -- Complete elliptic integral of the second kind.
+   ellipeinc -- Incomplete elliptic integral of the second kind.
+   elliprc   -- Degenerate symmetric integral RC.
+   elliprd   -- Symmetric elliptic integral of the second kind.
+   elliprf   -- Completely-symmetric elliptic integral of the first kind.
+   elliprg   -- Completely-symmetric elliptic integral of the second kind.
+   elliprj   -- Symmetric elliptic integral of the third kind.
 
-
-Discrete distributions
-----------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   bernoulli                -- Bernoulli
-   betabinom                -- Beta-Binomial
-   betanbinom               -- Beta-Negative Binomial
-   binom                    -- Binomial
-   boltzmann                -- Boltzmann (Truncated Discrete Exponential)
-   dlaplace                 -- Discrete Laplacian
-   geom                     -- Geometric
-   hypergeom                -- Hypergeometric
-   logser                   -- Logarithmic (Log-Series, Series)
-   nbinom                   -- Negative Binomial
-   nchypergeom_fisher       -- Fisher's Noncentral Hypergeometric
-   nchypergeom_wallenius    -- Wallenius's Noncentral Hypergeometric
-   nhypergeom               -- Negative Hypergeometric
-   planck                   -- Planck (Discrete Exponential)
-   poisson                  -- Poisson
-   poisson_binom            -- Poisson Binomial
-   randint                  -- Discrete Uniform
-   skellam                  -- Skellam
-   yulesimon                -- Yule-Simon
-   zipf                     -- Zipf (Zeta)
-   zipfian                  -- Zipfian
-
-
-An overview of statistical functions is given below.  Many of these functions
-have a similar version in `scipy.stats.mstats` which work for masked arrays.
-
-Summary statistics
-==================
+Bessel functions
+----------------
 
 .. autosummary::
    :toctree: generated/
 
-   describe          -- Descriptive statistics
-   gmean             -- Geometric mean
-   hmean             -- Harmonic mean
-   pmean             -- Power mean
-   kurtosis          -- Fisher or Pearson kurtosis
-   mode              -- Modal value
-   moment            -- Central moment
-   lmoment
-   expectile         -- Expectile
-   skew              -- Skewness
-   kstat             --
-   kstatvar          --
-   tmean             -- Truncated arithmetic mean
-   tvar              -- Truncated variance
-   tmin              --
-   tmax              --
-   tstd              --
-   tsem              --
-   variation         -- Coefficient of variation
-   find_repeats
-   rankdata
-   tiecorrect
-   trim_mean
-   gstd              -- Geometric Standard Deviation
-   iqr
-   sem
-   bayes_mvs
-   mvsdist
-   entropy
-   differential_entropy
-   median_abs_deviation
+   jv                -- Bessel function of the first kind of real order and \
+                        complex argument.
+   jve               -- Exponentially scaled Bessel function of order `v`.
+   yn                -- Bessel function of the second kind of integer order and \
+                        real argument.
+   yv                -- Bessel function of the second kind of real order and \
+                        complex argument.
+   yve               -- Exponentially scaled Bessel function of the second kind \
+                        of real order.
+   kn                -- Modified Bessel function of the second kind of integer \
+                        order `n`
+   kv                -- Modified Bessel function of the second kind of real order \
+                        `v`
+   kve               -- Exponentially scaled modified Bessel function of the \
+                        second kind.
+   iv                -- Modified Bessel function of the first kind of real order.
+   ive               -- Exponentially scaled modified Bessel function of the \
+                        first kind.
+   hankel1           -- Hankel function of the first kind.
+   hankel1e          -- Exponentially scaled Hankel function of the first kind.
+   hankel2           -- Hankel function of the second kind.
+   hankel2e          -- Exponentially scaled Hankel function of the second kind.
+   wright_bessel     -- Wright's generalized Bessel function.
+   log_wright_bessel -- Logarithm of Wright's generalized Bessel function.
 
-Frequency statistics
-====================
+The following function does not accept NumPy arrays (it is not a
+universal function):
 
 .. autosummary::
    :toctree: generated/
 
-   cumfreq
-   percentileofscore
-   scoreatpercentile
-   relfreq
+   lmbda -- Jahnke-Emden Lambda function, Lambdav(x).
+
+Zeros of Bessel functions
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following functions do not accept NumPy arrays (they are not
+universal functions):
 
 .. autosummary::
    :toctree: generated/
 
-   binned_statistic     -- Compute a binned statistic for a set of data.
-   binned_statistic_2d  -- Compute a 2-D binned statistic for a set of data.
-   binned_statistic_dd  -- Compute a d-D binned statistic for a set of data.
+   jnjnp_zeros -- Compute zeros of integer-order Bessel functions Jn and Jn'.
+   jnyn_zeros  -- Compute nt zeros of Bessel functions Jn(x), Jn'(x), Yn(x), and Yn'(x).
+   jn_zeros    -- Compute zeros of integer-order Bessel function Jn(x).
+   jnp_zeros   -- Compute zeros of integer-order Bessel function derivative Jn'(x).
+   yn_zeros    -- Compute zeros of integer-order Bessel function Yn(x).
+   ynp_zeros   -- Compute zeros of integer-order Bessel function derivative Yn'(x).
+   y0_zeros    -- Compute nt zeros of Bessel function Y0(z), and derivative at each zero.
+   y1_zeros    -- Compute nt zeros of Bessel function Y1(z), and derivative at each zero.
+   y1p_zeros   -- Compute nt zeros of Bessel derivative Y1'(z), and value at each zero.
 
-.. _hypotests:
-
-Hypothesis Tests and related functions
-======================================
-SciPy has many functions for performing hypothesis tests that return a
-test statistic and a p-value, and several of them return confidence intervals
-and/or other related information.
-
-The headings below are based on common uses of the functions within, but due to
-the wide variety of statistical procedures, any attempt at coarse-grained
-categorization will be imperfect. Also, note that tests within the same heading
-are not interchangeable in general (e.g. many have different distributional
-assumptions).
-
-One Sample Tests / Paired Sample Tests
---------------------------------------
-One sample tests are typically used to assess whether a single sample was
-drawn from a specified distribution or a distribution with specified properties
-(e.g. zero mean).
+Faster versions of common Bessel functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: generated/
 
-   ttest_1samp
-   binomtest
-   quantile_test
-   skewtest
-   kurtosistest
-   normaltest
-   jarque_bera
-   shapiro
-   anderson
-   cramervonmises
-   ks_1samp
-   goodness_of_fit
-   chisquare
-   power_divergence
+   j0  -- Bessel function of the first kind of order 0.
+   j1  -- Bessel function of the first kind of order 1.
+   y0  -- Bessel function of the second kind of order 0.
+   y1  -- Bessel function of the second kind of order 1.
+   i0  -- Modified Bessel function of order 0.
+   i0e -- Exponentially scaled modified Bessel function of order 0.
+   i1  -- Modified Bessel function of order 1.
+   i1e -- Exponentially scaled modified Bessel function of order 1.
+   k0  -- Modified Bessel function of the second kind of order 0, :math:`K_0`.
+   k0e -- Exponentially scaled modified Bessel function K of order 0
+   k1  -- Modified Bessel function of the second kind of order 1, :math:`K_1(x)`.
+   k1e -- Exponentially scaled modified Bessel function K of order 1.
 
-Paired sample tests are often used to assess whether two samples were drawn
-from the same distribution; they differ from the independent sample tests below
-in that each observation in one sample is treated as paired with a
-closely-related observation in the other sample (e.g. when environmental
-factors are controlled between observations within a pair but not among pairs).
-They can also be interpreted or used as one-sample tests (e.g. tests on the
-mean or median of *differences* between paired observations).
+Integrals of Bessel functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: generated/
 
-   ttest_rel
-   wilcoxon
+   itj0y0     -- Integrals of Bessel functions of order 0.
+   it2j0y0    -- Integrals related to Bessel functions of order 0.
+   iti0k0     -- Integrals of modified Bessel functions of order 0.
+   it2i0k0    -- Integrals related to modified Bessel functions of order 0.
+   besselpoly -- Weighted integral of a Bessel function.
 
-Association/Correlation Tests
------------------------------
-
-These tests are often used to assess whether there is a relationship (e.g.
-linear) between paired observations in multiple samples or among the
-coordinates of multivariate observations.
-
-.. autosummary::
-   :toctree: generated/
-
-   linregress
-   pearsonr
-   spearmanr
-   pointbiserialr
-   kendalltau
-   chatterjeexi
-   weightedtau
-   somersd
-   siegelslopes
-   theilslopes
-   page_trend_test
-   multiscale_graphcorr
-
-These association tests and are to work with samples in the form of contingency
-tables. Supporting functions are available in `scipy.stats.contingency`.
+Derivatives of Bessel functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: generated/
 
-   chi2_contingency
-   fisher_exact
-   barnard_exact
-   boschloo_exact
+   jvp  -- Compute nth derivative of Bessel function Jv(z) with respect to `z`.
+   yvp  -- Compute nth derivative of Bessel function Yv(z) with respect to `z`.
+   kvp  -- Compute nth derivative of real-order modified Bessel function Kv(z)
+   ivp  -- Compute nth derivative of modified Bessel function Iv(z) with respect to `z`.
+   h1vp -- Compute nth derivative of Hankel function H1v(z) with respect to `z`.
+   h2vp -- Compute nth derivative of Hankel function H2v(z) with respect to `z`.
 
-Independent Sample Tests
-------------------------
-Independent sample tests are typically used to assess whether multiple samples
-were independently drawn from the same distribution or different distributions
-with a shared property (e.g. equal means).
-
-Some tests are specifically for comparing two samples.
+Spherical Bessel functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: generated/
 
-   ttest_ind_from_stats
-   poisson_means_test
-   ttest_ind
-   mannwhitneyu
-   bws_test
-   ranksums
-   brunnermunzel
-   mood
-   ansari
-   cramervonmises_2samp
-   epps_singleton_2samp
-   ks_2samp
-   kstest
+   spherical_jn -- Spherical Bessel function of the first kind or its derivative.
+   spherical_yn -- Spherical Bessel function of the second kind or its derivative.
+   spherical_in -- Modified spherical Bessel function of the first kind or its derivative.
+   spherical_kn -- Modified spherical Bessel function of the second kind or its derivative.
 
-Others are generalized to multiple samples.
+Riccati-Bessel functions
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following functions do not accept NumPy arrays (they are not
+universal functions):
 
 .. autosummary::
    :toctree: generated/
 
-   f_oneway
-   tukey_hsd
-   dunnett
-   kruskal
-   alexandergovern
-   fligner
-   levene
-   bartlett
-   median_test
-   friedmanchisquare
-   anderson_ksamp
+   riccati_jn -- Compute Ricatti-Bessel function of the first kind and its derivative.
+   riccati_yn -- Compute Ricatti-Bessel function of the second kind and its derivative.
 
-Resampling and Monte Carlo Methods
-----------------------------------
-The following functions can reproduce the p-value and confidence interval
-results of most of the functions above, and often produce accurate results in a
-wider variety of conditions. They can also be used to perform hypothesis tests
-and generate confidence intervals for custom statistics. This flexibility comes
-at the cost of greater computational requirements and stochastic results.
+Struve functions
+----------------
 
 .. autosummary::
    :toctree: generated/
 
-   monte_carlo_test
-   permutation_test
-   bootstrap
-   power
+   struve       -- Struve function.
+   modstruve    -- Modified Struve function.
+   itstruve0    -- Integral of the Struve function of order 0.
+   it2struve0   -- Integral related to the Struve function of order 0.
+   itmodstruve0 -- Integral of the modified Struve function of order 0.
 
-Instances of the following object can be passed into some hypothesis test
-functions to perform a resampling or Monte Carlo version of the hypothesis
-test.
 
-.. autosummary::
-   :toctree: generated/
+Raw statistical functions
+-------------------------
 
-   MonteCarloMethod
-   PermutationMethod
-   BootstrapMethod
+.. seealso:: :mod:`scipy.stats`: Friendly versions of these functions.
 
-Multiple Hypothesis Testing and Meta-Analysis
----------------------------------------------
-These functions are for assessing the results of individual tests as a whole.
-Functions for performing specific multiple hypothesis tests (e.g. post hoc
-tests) are listed above.
+Binomial distribution
+^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: generated/
 
-   combine_pvalues
-   false_discovery_control
+   bdtr         -- Binomial distribution cumulative distribution function.
+   bdtrc        -- Binomial distribution survival function.
+   bdtri        -- Inverse function to `bdtr` with respect to `p`.
+   bdtrik       -- Inverse function to `bdtr` with respect to `k`.
+   bdtrin       -- Inverse function to `bdtr` with respect to `n`.
 
-
-The following functions are related to the tests above but do not belong in the
-above categories.
-
-Random Variables
-================
-
-.. autosummary::
-   :toctree: generated/
-
-   make_distribution
-   Normal
-   Uniform
-   Mixture
-   order_statistic
-   truncate
-   abs
-   exp
-   log
-
-Quasi-Monte Carlo
-=================
-
-.. toctree::
-   :maxdepth: 4
-
-   stats.qmc
-
-Contingency Tables
-==================
-
-.. toctree::
-   :maxdepth: 4
-
-   stats.contingency
-
-Masked statistics functions
-===========================
-
-.. toctree::
-
-   stats.mstats
-
-
-Other statistical functionality
-===============================
-
-Transformations
----------------
+Beta distribution
+^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: generated/
 
-   boxcox
-   boxcox_normmax
-   boxcox_llf
-   yeojohnson
-   yeojohnson_normmax
-   yeojohnson_llf
-   obrientransform
-   sigmaclip
-   trimboth
-   trim1
-   zmap
-   zscore
-   gzscore
+   btdtria      -- Inverse of `betainc` with respect to `a`.
+   btdtrib      -- Inverse of `betainc` with respect to `b`.
 
-Statistical distances
----------------------
+F distribution
+^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: generated/
 
-   wasserstein_distance
-   wasserstein_distance_nd
-   energy_distance
+   fdtr         -- F cumulative distribution function.
+   fdtrc        -- F survival function.
+   fdtri        -- The `p`-th quantile of the F-distribution.
+   fdtridfd     -- Inverse to `fdtr` vs dfd.
 
-Sampling
---------
+Gamma distribution
+^^^^^^^^^^^^^^^^^^
 
-.. toctree::
-   :maxdepth: 4
+.. autosummary::
+   :toctree: generated/
 
-   stats.sampling
+   gdtr         -- Gamma distribution cumulative distribution function.
+   gdtrc        -- Gamma distribution survival function.
+   gdtria       -- Inverse of `gdtr` vs a.
+   gdtrib       -- Inverse of `gdtr` vs b.
+   gdtrix       -- Inverse of `gdtr` vs x.
 
-Fitting / Survival Analysis
+Negative binomial distribution
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   nbdtr        -- Negative binomial cumulative distribution function.
+   nbdtrc       -- Negative binomial survival function.
+   nbdtri       -- Inverse of `nbdtr` vs `p`.
+   nbdtrik      -- Inverse of `nbdtr` vs `k`.
+   nbdtrin      -- Inverse of `nbdtr` vs `n`.
+
+Noncentral F distribution
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   ncfdtr       -- Cumulative distribution function of the non-central F distribution.
+   ncfdtridfd   -- Calculate degrees of freedom (denominator) for the noncentral F-distribution.
+   ncfdtridfn   -- Calculate degrees of freedom (numerator) for the noncentral F-distribution.
+   ncfdtri      -- Inverse cumulative distribution function of the non-central F distribution.
+   ncfdtrinc    -- Calculate non-centrality parameter for non-central F distribution.
+
+Noncentral t distribution
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   nctdtr       -- Cumulative distribution function of the non-central `t` distribution.
+   nctdtridf    -- Calculate degrees of freedom for non-central t distribution.
+   nctdtrit     -- Inverse cumulative distribution function of the non-central t distribution.
+   nctdtrinc    -- Calculate non-centrality parameter for non-central t distribution.
+
+Normal distribution
+^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   nrdtrimn     -- Calculate mean of normal distribution given other params.
+   nrdtrisd     -- Calculate standard deviation of normal distribution given other params.
+   ndtr         -- Normal cumulative distribution function.
+   log_ndtr     -- Logarithm of normal cumulative distribution function.
+   ndtri        -- Inverse of `ndtr` vs x.
+   ndtri_exp    -- Inverse of `log_ndtr` vs x.
+
+Poisson distribution
+^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   pdtr         -- Poisson cumulative distribution function.
+   pdtrc        -- Poisson survival function.
+   pdtri        -- Inverse to `pdtr` vs m.
+   pdtrik       -- Inverse to `pdtr` vs k.
+
+Student t distribution
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   stdtr        -- Student t distribution cumulative distribution function.
+   stdtridf     -- Inverse of `stdtr` vs df.
+   stdtrit      -- Inverse of `stdtr` vs `t`.
+
+Chi square distribution
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   chdtr        -- Chi square cumulative distribution function.
+   chdtrc       -- Chi square survival function.
+   chdtri       -- Inverse to `chdtrc`.
+   chdtriv      -- Inverse to `chdtr` vs `v`.
+
+Non-central chi square distribution
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   chndtr       -- Non-central chi square cumulative distribution function.
+   chndtridf    -- Inverse to `chndtr` vs `df`.
+   chndtrinc    -- Inverse to `chndtr` vs `nc`.
+   chndtrix     -- Inverse to `chndtr` vs `x`.
+
+Kolmogorov distribution
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   smirnov      -- Kolmogorov-Smirnov complementary cumulative distribution function.
+   smirnovi     -- Inverse to `smirnov`.
+   kolmogorov   -- Complementary cumulative distribution function of Kolmogorov distribution.
+   kolmogi      -- Inverse function to `kolmogorov`.
+
+Box-Cox transformation
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   boxcox       -- Compute the Box-Cox transformation.
+   boxcox1p     -- Compute the Box-Cox transformation of 1 + `x`.
+   inv_boxcox   -- Compute the inverse of the Box-Cox transformation.
+   inv_boxcox1p -- Compute the inverse of the Box-Cox transformation.
+
+
+Sigmoidal functions
+^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   logit        -- Logit ufunc for ndarrays.
+   expit        -- Logistic sigmoid function.
+   log_expit    -- Logarithm of the logistic sigmoid function.
+
+Miscellaneous
+^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: generated/
+
+   tklmbda      -- Tukey-Lambda cumulative distribution function.
+   owens_t      -- Owen's T Function.
+
+
+Information Theory functions
+----------------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   entr         -- Elementwise function for computing entropy.
+   rel_entr     -- Elementwise function for computing relative entropy.
+   kl_div       -- Elementwise function for computing Kullback-Leibler divergence.
+   huber        -- Huber loss function.
+   pseudo_huber -- Pseudo-Huber loss function.
+
+
+Gamma and related functions
 ---------------------------
 
 .. autosummary::
    :toctree: generated/
 
-   fit
-   ecdf
-   logrank
+   gamma        -- Gamma function.
+   gammaln      -- Logarithm of the absolute value of the Gamma function for real inputs.
+   loggamma     -- Principal branch of the logarithm of the Gamma function.
+   gammasgn     -- Sign of the gamma function.
+   gammainc     -- Regularized lower incomplete gamma function.
+   gammaincinv  -- Inverse to `gammainc`.
+   gammaincc    -- Regularized upper incomplete gamma function.
+   gammainccinv -- Inverse to `gammaincc`.
+   beta         -- Beta function.
+   betaln       -- Natural logarithm of absolute value of beta function.
+   betainc      -- Incomplete beta integral.
+   betaincc     -- Complemented incomplete beta integral.
+   betaincinv   -- Inverse function to beta integral.
+   betainccinv  -- Inverse of the complemented incomplete beta integral.
+   psi          -- The digamma function.
+   rgamma       -- Gamma function inverted.
+   polygamma    -- Polygamma function n.
+   multigammaln -- Returns the log of multivariate gamma, also sometimes called the generalized gamma.
+   digamma      -- psi(x[, out]).
+   poch         -- Rising factorial (z)_m.
 
-Directional statistical functions
----------------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   directional_stats
-   circmean
-   circvar
-   circstd
-
-Sensitivity Analysis
---------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   sobol_indices
-
-Plot-tests
-----------
+Error function and Fresnel integrals
+------------------------------------
 
 .. autosummary::
    :toctree: generated/
 
-   ppcc_max
-   ppcc_plot
-   probplot
-   boxcox_normplot
-   yeojohnson_normplot
+   erf           -- Returns the error function of complex argument.
+   erfc          -- Complementary error function, ``1 - erf(x)``.
+   erfcx         -- Scaled complementary error function, ``exp(x**2) * erfc(x)``.
+   erfi          -- Imaginary error function, ``-i erf(i z)``.
+   erfinv        -- Inverse function for erf.
+   erfcinv       -- Inverse function for erfc.
+   wofz          -- Faddeeva function.
+   dawsn         -- Dawson's integral.
+   fresnel       -- Fresnel sin and cos integrals.
+   fresnel_zeros -- Compute nt complex zeros of sine and cosine Fresnel integrals S(z) and C(z).
+   modfresnelp   -- Modified Fresnel positive integrals.
+   modfresnelm   -- Modified Fresnel negative integrals.
+   voigt_profile -- Voigt profile.
 
-Univariate and multivariate kernel density estimation
------------------------------------------------------
+The following functions do not accept NumPy arrays (they are not
+universal functions):
 
 .. autosummary::
    :toctree: generated/
 
-   gaussian_kde
+   erf_zeros      -- Compute nt complex zeros of error function erf(z).
+   fresnelc_zeros -- Compute nt complex zeros of cosine Fresnel integral C(z).
+   fresnels_zeros -- Compute nt complex zeros of sine Fresnel integral S(z).
 
-Warnings / Errors used in :mod:`scipy.stats`
---------------------------------------------
+Legendre functions
+------------------
 
 .. autosummary::
    :toctree: generated/
 
-   DegenerateDataWarning
-   ConstantInputWarning
-   NearConstantInputWarning
-   FitError
+   legendre_p                 -- Legendre polynomials of the first kind.
+   legendre_p_all             -- All Legendre polynomials of the first kind up to a specified order.
+   assoc_legendre_p           -- Associated Legendre polynomials of the first kind.
+   assoc_legendre_p_all       -- All associated Legendre polynomials of the first kind up to a specified order and degree.
+   sph_legendre_p             -- Spherical Legendre polynomials of the first kind.
+   sph_legendre_p_all         -- All spherical Legendre polynomials of the first kind up to a specified order and degree.
+   sph_harm_y                 -- Spherical harmonics.
+   sph_harm_y_all             -- All spherical harmonics up to a specified order and degree.
 
-Result classes used in :mod:`scipy.stats`
------------------------------------------
+The following functions are in the process of being deprecated in favor of the above,
+which provide a more flexible and consistent interface.
+
+.. autosummary::
+   :toctree: generated/
+
+   lpmv                       -- Associated Legendre function of integer order and real degree.
+   sph_harm                   -- Compute spherical harmonics.
+   clpmn                      -- Associated Legendre function of the first kind for complex arguments.
+   lpn                        -- Legendre function of the first kind.
+   lqn                        -- Legendre function of the second kind.
+   lpmn                       -- Sequence of associated Legendre functions of the first kind.
+   lqmn                       -- Sequence of associated Legendre functions of the second kind.
+
+Ellipsoidal harmonics
+---------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   ellip_harm   -- Ellipsoidal harmonic functions E^p_n(l).
+   ellip_harm_2 -- Ellipsoidal harmonic functions F^p_n(l).
+   ellip_normal -- Ellipsoidal harmonic normalization constants gamma^p_n.
+
+Orthogonal polynomials
+----------------------
+
+The following functions evaluate values of orthogonal polynomials:
+
+.. autosummary::
+   :toctree: generated/
+
+   assoc_laguerre   -- Compute the generalized (associated) Laguerre polynomial of degree n and order k.
+   eval_legendre    -- Evaluate Legendre polynomial at a point.
+   eval_chebyt      -- Evaluate Chebyshev polynomial of the first kind at a point.
+   eval_chebyu      -- Evaluate Chebyshev polynomial of the second kind at a point.
+   eval_chebyc      -- Evaluate Chebyshev polynomial of the first kind on [-2, 2] at a point.
+   eval_chebys      -- Evaluate Chebyshev polynomial of the second kind on [-2, 2] at a point.
+   eval_jacobi      -- Evaluate Jacobi polynomial at a point.
+   eval_laguerre    -- Evaluate Laguerre polynomial at a point.
+   eval_genlaguerre -- Evaluate generalized Laguerre polynomial at a point.
+   eval_hermite     -- Evaluate physicist's Hermite polynomial at a point.
+   eval_hermitenorm -- Evaluate probabilist's (normalized) Hermite polynomial at a point.
+   eval_gegenbauer  -- Evaluate Gegenbauer polynomial at a point.
+   eval_sh_legendre -- Evaluate shifted Legendre polynomial at a point.
+   eval_sh_chebyt   -- Evaluate shifted Chebyshev polynomial of the first kind at a point.
+   eval_sh_chebyu   -- Evaluate shifted Chebyshev polynomial of the second kind at a point.
+   eval_sh_jacobi   -- Evaluate shifted Jacobi polynomial at a point.
+
+The following functions compute roots and quadrature weights for
+orthogonal polynomials:
+
+.. autosummary::
+   :toctree: generated/
+
+   roots_legendre    -- Gauss-Legendre quadrature.
+   roots_chebyt      -- Gauss-Chebyshev (first kind) quadrature.
+   roots_chebyu      -- Gauss-Chebyshev (second kind) quadrature.
+   roots_chebyc      -- Gauss-Chebyshev (first kind) quadrature.
+   roots_chebys      -- Gauss-Chebyshev (second kind) quadrature.
+   roots_jacobi      -- Gauss-Jacobi quadrature.
+   roots_laguerre    -- Gauss-Laguerre quadrature.
+   roots_genlaguerre -- Gauss-generalized Laguerre quadrature.
+   roots_hermite     -- Gauss-Hermite (physicist's) quadrature.
+   roots_hermitenorm -- Gauss-Hermite (statistician's) quadrature.
+   roots_gegenbauer  -- Gauss-Gegenbauer quadrature.
+   roots_sh_legendre -- Gauss-Legendre (shifted) quadrature.
+   roots_sh_chebyt   -- Gauss-Chebyshev (first kind, shifted) quadrature.
+   roots_sh_chebyu   -- Gauss-Chebyshev (second kind, shifted) quadrature.
+   roots_sh_jacobi   -- Gauss-Jacobi (shifted) quadrature.
+
+The functions below, in turn, return the polynomial coefficients in
+``orthopoly1d`` objects, which function similarly as `numpy.poly1d`.
+The ``orthopoly1d`` class also has an attribute ``weights``, which returns
+the roots, weights, and total weights for the appropriate form of Gaussian
+quadrature. These are returned in an ``n x 3`` array with roots in the first
+column, weights in the second column, and total weights in the final column.
+Note that ``orthopoly1d`` objects are converted to `~numpy.poly1d` when doing
+arithmetic, and lose information of the original orthogonal polynomial.
+
+.. autosummary::
+   :toctree: generated/
+
+   legendre    -- Legendre polynomial.
+   chebyt      -- Chebyshev polynomial of the first kind.
+   chebyu      -- Chebyshev polynomial of the second kind.
+   chebyc      -- Chebyshev polynomial of the first kind on :math:`[-2, 2]`.
+   chebys      -- Chebyshev polynomial of the second kind on :math:`[-2, 2]`.
+   jacobi      -- Jacobi polynomial.
+   laguerre    -- Laguerre polynomial.
+   genlaguerre -- Generalized (associated) Laguerre polynomial.
+   hermite     -- Physicist's Hermite polynomial.
+   hermitenorm -- Normalized (probabilist's) Hermite polynomial.
+   gegenbauer  -- Gegenbauer (ultraspherical) polynomial.
+   sh_legendre -- Shifted Legendre polynomial.
+   sh_chebyt   -- Shifted Chebyshev polynomial of the first kind.
+   sh_chebyu   -- Shifted Chebyshev polynomial of the second kind.
+   sh_jacobi   -- Shifted Jacobi polynomial.
 
 .. warning::
 
-    These classes are private, but they are included here because instances
-    of them are returned by other statistical functions. User import and
-    instantiation is not supported.
+   Computing values of high-order polynomials (around ``order > 20``) using
+   polynomial coefficients is numerically unstable. To evaluate polynomial
+   values, the ``eval_*`` functions should be used instead.
 
-.. toctree::
-   :maxdepth: 2
 
-   stats._result_classes
+Hypergeometric functions
+------------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   hyp2f1 -- Gauss hypergeometric function 2F1(a, b; c; z).
+   hyp1f1 -- Confluent hypergeometric function 1F1(a, b; x).
+   hyperu -- Confluent hypergeometric function U(a, b, x) of the second kind.
+   hyp0f1 -- Confluent hypergeometric limit function 0F1.
+
+
+Parabolic cylinder functions
+----------------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   pbdv -- Parabolic cylinder function D.
+   pbvv -- Parabolic cylinder function V.
+   pbwa -- Parabolic cylinder function W.
+
+The following functions do not accept NumPy arrays (they are not
+universal functions):
+
+.. autosummary::
+   :toctree: generated/
+
+   pbdv_seq -- Parabolic cylinder functions Dv(x) and derivatives.
+   pbvv_seq -- Parabolic cylinder functions Vv(x) and derivatives.
+   pbdn_seq -- Parabolic cylinder functions Dn(z) and derivatives.
+
+Mathieu and related functions
+-----------------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   mathieu_a -- Characteristic value of even Mathieu functions.
+   mathieu_b -- Characteristic value of odd Mathieu functions.
+
+The following functions do not accept NumPy arrays (they are not
+universal functions):
+
+.. autosummary::
+   :toctree: generated/
+
+   mathieu_even_coef -- Fourier coefficients for even Mathieu and modified Mathieu functions.
+   mathieu_odd_coef  -- Fourier coefficients for even Mathieu and modified Mathieu functions.
+
+The following return both function and first derivative:
+
+.. autosummary::
+   :toctree: generated/
+
+   mathieu_cem     -- Even Mathieu function and its derivative.
+   mathieu_sem     -- Odd Mathieu function and its derivative.
+   mathieu_modcem1 -- Even modified Mathieu function of the first kind and its derivative.
+   mathieu_modcem2 -- Even modified Mathieu function of the second kind and its derivative.
+   mathieu_modsem1 -- Odd modified Mathieu function of the first kind and its derivative.
+   mathieu_modsem2 -- Odd modified Mathieu function of the second kind and its derivative.
+
+Spheroidal wave functions
+-------------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   pro_ang1   -- Prolate spheroidal angular function of the first kind and its derivative.
+   pro_rad1   -- Prolate spheroidal radial function of the first kind and its derivative.
+   pro_rad2   -- Prolate spheroidal radial function of the second kind and its derivative.
+   obl_ang1   -- Oblate spheroidal angular function of the first kind and its derivative.
+   obl_rad1   -- Oblate spheroidal radial function of the first kind and its derivative.
+   obl_rad2   -- Oblate spheroidal radial function of the second kind and its derivative.
+   pro_cv     -- Characteristic value of prolate spheroidal function.
+   obl_cv     -- Characteristic value of oblate spheroidal function.
+   pro_cv_seq -- Characteristic values for prolate spheroidal wave functions.
+   obl_cv_seq -- Characteristic values for oblate spheroidal wave functions.
+
+The following functions require pre-computed characteristic value:
+
+.. autosummary::
+   :toctree: generated/
+
+   pro_ang1_cv -- Prolate spheroidal angular function pro_ang1 for precomputed characteristic value.
+   pro_rad1_cv -- Prolate spheroidal radial function pro_rad1 for precomputed characteristic value.
+   pro_rad2_cv -- Prolate spheroidal radial function pro_rad2 for precomputed characteristic value.
+   obl_ang1_cv -- Oblate spheroidal angular function obl_ang1 for precomputed characteristic value.
+   obl_rad1_cv -- Oblate spheroidal radial function obl_rad1 for precomputed characteristic value.
+   obl_rad2_cv -- Oblate spheroidal radial function obl_rad2 for precomputed characteristic value.
+
+Kelvin functions
+----------------
+
+.. autosummary::
+   :toctree: generated/
+
+   kelvin       -- Kelvin functions as complex numbers.
+   kelvin_zeros -- Compute nt zeros of all Kelvin functions.
+   ber          -- Kelvin function ber.
+   bei          -- Kelvin function bei
+   berp         -- Derivative of the Kelvin function `ber`.
+   beip         -- Derivative of the Kelvin function `bei`.
+   ker          -- Kelvin function ker.
+   kei          -- Kelvin function ker.
+   kerp         -- Derivative of the Kelvin function ker.
+   keip         -- Derivative of the Kelvin function kei.
+
+The following functions do not accept NumPy arrays (they are not
+universal functions):
+
+.. autosummary::
+   :toctree: generated/
+
+   ber_zeros  -- Compute nt zeros of the Kelvin function ber(x).
+   bei_zeros  -- Compute nt zeros of the Kelvin function bei(x).
+   berp_zeros -- Compute nt zeros of the Kelvin function ber'(x).
+   beip_zeros -- Compute nt zeros of the Kelvin function bei'(x).
+   ker_zeros  -- Compute nt zeros of the Kelvin function ker(x).
+   kei_zeros  -- Compute nt zeros of the Kelvin function kei(x).
+   kerp_zeros -- Compute nt zeros of the Kelvin function ker'(x).
+   keip_zeros -- Compute nt zeros of the Kelvin function kei'(x).
+
+Combinatorics
+-------------
+
+.. autosummary::
+   :toctree: generated/
+
+   comb -- The number of combinations of N things taken k at a time.
+   perm -- Permutations of N things taken k at a time, i.e., k-permutations of N.
+   stirling2 -- Stirling numbers of the second kind.
+
+Lambert W and related functions
+-------------------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   lambertw    -- Lambert W function.
+   wrightomega -- Wright Omega function.
+
+Other special functions
+-----------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   agm         -- Arithmetic, Geometric Mean.
+   bernoulli   -- Bernoulli numbers B0..Bn (inclusive).
+   binom       -- Binomial coefficient
+   diric       -- Periodic sinc function, also called the Dirichlet function.
+   euler       -- Euler numbers E0..En (inclusive).
+   expn        -- Exponential integral E_n.
+   exp1        -- Exponential integral E_1 of complex argument z.
+   expi        -- Exponential integral Ei.
+   factorial   -- The factorial of a number or array of numbers.
+   factorial2  -- Double factorial.
+   factorialk  -- Multifactorial of n of order k, n(!!...!).
+   shichi      -- Hyperbolic sine and cosine integrals.
+   sici        -- Sine and cosine integrals.
+   softmax     -- Softmax function.
+   log_softmax -- Logarithm of softmax function.
+   spence      -- Spence's function, also known as the dilogarithm.
+   zeta        -- Riemann zeta function.
+   zetac       -- Riemann zeta function minus 1.
+   softplus    -- Softplus function.
+
+Convenience functions
+---------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   cbrt      -- Cube root of `x`.
+   exp10     -- 10**x.
+   exp2      -- 2**x.
+   radian    -- Convert from degrees to radians.
+   cosdg     -- Cosine of the angle `x` given in degrees.
+   sindg     -- Sine of angle given in degrees.
+   tandg     -- Tangent of angle x given in degrees.
+   cotdg     -- Cotangent of the angle `x` given in degrees.
+   log1p     -- Calculates log(1+x) for use when `x` is near zero.
+   expm1     -- ``exp(x) - 1`` for use when `x` is near zero.
+   cosm1     -- ``cos(x) - 1`` for use when `x` is near zero.
+   powm1     -- ``x**y - 1`` for use when `y` is near zero or `x` is near 1.
+   round     -- Round to nearest integer.
+   xlogy     -- Compute ``x*log(y)`` so that the result is 0 if ``x = 0``.
+   xlog1py   -- Compute ``x*log1p(y)`` so that the result is 0 if ``x = 0``.
+   logsumexp -- Compute the log of the sum of exponentials of input elements.
+   exprel    -- Relative error exponential, (exp(x)-1)/x, for use when `x` is near zero.
+   sinc      -- Return the sinc function.
 
 """  # noqa: E501
 
-from ._warnings_errors import (ConstantInputWarning, NearConstantInputWarning,
-                               DegenerateDataWarning, FitError)
-from ._stats_py import *
-from ._variation import variation
-from .distributions import *
-from ._morestats import *
-from ._multicomp import *
-from ._binomtest import binomtest
-from ._binned_statistic import *
-from ._kde import gaussian_kde
-from . import mstats
-from . import qmc
-from ._multivariate import *
-from . import contingency
-from .contingency import chi2_contingency
-from ._censored_data import CensoredData
-from ._resampling import (bootstrap, monte_carlo_test, permutation_test, power,
-                          MonteCarloMethod, PermutationMethod, BootstrapMethod)
-from ._entropy import *
-from ._hypotests import *
-from ._page_trend_test import page_trend_test
-from ._mannwhitneyu import mannwhitneyu
-from ._bws_test import bws_test
-from ._fit import fit, goodness_of_fit
-from ._covariance import Covariance
-from ._sensitivity_analysis import *
-from ._survival import *
-from ._distribution_infrastructure import (
-    make_distribution, Mixture, order_statistic, truncate, exp, log, abs
-)
-from ._new_distributions import Normal, Uniform
-from ._mgc import multiscale_graphcorr
-from ._correlation import chatterjeexi
+import os
+import warnings
 
+
+def _load_libsf_error_state():
+    """Load libsf_error_state.dll shared library on Windows
+
+    libsf_error_state manages shared state used by
+    ``scipy.special.seterr`` and ``scipy.special.geterr`` so that these
+    can work consistently between special functions provided by different
+    extension modules. This shared library is installed in scipy/special
+    alongside this __init__.py file. Due to lack of rpath support, Windows
+    cannot find shared libraries installed within wheels. To circumvent this,
+    we pre-load ``lib_sf_error_state.dll`` when on Windows.
+
+    The logic for this function was borrowed from the function ``make_init``
+    in `scipy/tools/openblas_support.py`:
+    https://github.com/scipy/scipy/blob/bb92c8014e21052e7dde67a76b28214dd1dcb94a/tools/openblas_support.py#L239-L274
+    """  # noqa: E501
+    if os.name == "nt":
+        try:
+            from ctypes import WinDLL
+            basedir = os.path.dirname(__file__)
+        except:  # noqa: E722
+            pass
+        else:
+            dll_path = os.path.join(basedir, "libsf_error_state.dll")
+            if os.path.exists(dll_path):
+                WinDLL(dll_path)
+
+
+_load_libsf_error_state()
+
+
+from ._sf_error import SpecialFunctionWarning, SpecialFunctionError
+
+from . import _ufuncs
+from ._ufuncs import *
+
+# Replace some function definitions from _ufuncs to add Array API support
+from ._support_alternative_backends import (
+    log_ndtr, ndtr, ndtri, erf, erfc, i0, i0e, i1, i1e, gammaln,
+    gammainc, gammaincc, logit, expit, entr, rel_entr, xlogy,
+    chdtr, chdtrc, betainc, betaincc, stdtr)
+
+from . import _basic
+from ._basic import *
+
+from ._logsumexp import logsumexp, softmax, log_softmax
+
+from . import _multiufuncs
+from ._multiufuncs import *
+
+from . import _orthogonal
+from ._orthogonal import *
+
+from ._spfun_stats import multigammaln
+from ._ellip_harm import (
+    ellip_harm,
+    ellip_harm_2,
+    ellip_normal
+)
+from ._lambertw import lambertw
+from ._spherical_bessel import (
+    spherical_jn,
+    spherical_yn,
+    spherical_in,
+    spherical_kn
+)
 
 # Deprecated namespaces, to be removed in v2.0.0
-from . import (
-    biasedurn, kde, morestats, mstats_basic, mstats_extras, mvn, stats
-)
+from . import add_newdocs, basic, orthogonal, specfun, sf_error, spfun_stats
 
-
-__all__ = [s for s in dir() if not s.startswith("_")]  # Remove dunders.
+# We replace some function definitions from _ufuncs with those from
+# _support_alternative_backends above, but those are all listed in _ufuncs.__all__,
+# so there is no need to consider _support_alternative_backends.__all__ here.
+__all__ = _ufuncs.__all__ + _basic.__all__ + _orthogonal.__all__ + _multiufuncs.__all__
+__all__ += [
+    'SpecialFunctionWarning',
+    'SpecialFunctionError',
+    'logsumexp',
+    'softmax',
+    'log_softmax',
+    'multigammaln',
+    'ellip_harm',
+    'ellip_harm_2',
+    'ellip_normal',
+    'lambertw',
+    'spherical_jn',
+    'spherical_yn',
+    'spherical_in',
+    'spherical_kn',
+]
 
 from scipy._lib._testutils import PytestTester
 test = PytestTester(__name__)
 del PytestTester
+
+
+def _get_include():
+    """This function is for development purposes only.
+
+    This function could disappear or its behavior could change at any time.
+    """
+    import os
+    return os.path.dirname(__file__)
+
