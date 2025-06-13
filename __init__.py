@@ -1,326 +1,459 @@
 """
-=======================================
-Signal processing (:mod:`scipy.signal`)
-=======================================
+=====================================================
+Optimization and root finding (:mod:`scipy.optimize`)
+=====================================================
 
-Convolution
-===========
+.. currentmodule:: scipy.optimize
 
-.. autosummary::
-   :toctree: generated/
+.. toctree::
+   :hidden:
 
-   convolve           -- N-D convolution.
-   correlate          -- N-D correlation.
-   fftconvolve        -- N-D convolution using the FFT.
-   oaconvolve         -- N-D convolution using the overlap-add method.
-   convolve2d         -- 2-D convolution (more options).
-   correlate2d        -- 2-D correlation (more options).
-   sepfir2d           -- Convolve with a 2-D separable FIR filter.
-   choose_conv_method -- Chooses faster of FFT and direct convolution methods.
-   correlation_lags   -- Determines lag indices for 1D cross-correlation.
+   optimize.cython_optimize
 
-B-splines
-=========
+SciPy ``optimize`` provides functions for minimizing (or maximizing)
+objective functions, possibly subject to constraints. It includes
+solvers for nonlinear problems (with support for both local and global
+optimization algorithms), linear programming, constrained
+and nonlinear least-squares, root finding, and curve fitting.
+
+Common functions and objects, shared across different solvers, are:
 
 .. autosummary::
    :toctree: generated/
 
-   gauss_spline   -- Gaussian approximation to the B-spline basis function.
-   cspline1d      -- Coefficients for 1-D cubic (3rd order) B-spline.
-   qspline1d      -- Coefficients for 1-D quadratic (2nd order) B-spline.
-   cspline2d      -- Coefficients for 2-D cubic (3rd order) B-spline.
-   qspline2d      -- Coefficients for 2-D quadratic (2nd order) B-spline.
-   cspline1d_eval -- Evaluate a cubic spline at the given points.
-   qspline1d_eval -- Evaluate a quadratic spline at the given points.
-   spline_filter  -- Smoothing spline (cubic) filtering of a rank-2 array.
+   show_options - Show specific options optimization solvers.
+   OptimizeResult - The optimization result returned by some optimizers.
+   OptimizeWarning - The optimization encountered problems.
 
-Filtering
-=========
 
-.. autosummary::
-   :toctree: generated/
+Optimization
+============
 
-   order_filter  -- N-D order filter.
-   medfilt       -- N-D median filter.
-   medfilt2d     -- 2-D median filter (faster).
-   wiener        -- N-D Wiener filter.
-
-   symiirorder1  -- 2nd-order IIR filter (cascade of first-order systems).
-   symiirorder2  -- 4th-order IIR filter (cascade of second-order systems).
-   lfilter       -- 1-D FIR and IIR digital linear filtering.
-   lfiltic       -- Construct initial conditions for `lfilter`.
-   lfilter_zi    -- Compute an initial state zi for the lfilter function that
-                 -- corresponds to the steady state of the step response.
-   filtfilt      -- A forward-backward filter.
-   savgol_filter -- Filter a signal using the Savitzky-Golay filter.
-
-   deconvolve    -- 1-D deconvolution using lfilter.
-
-   sosfilt       -- 1-D IIR digital linear filtering using
-                 -- a second-order sections filter representation.
-   sosfilt_zi    -- Compute an initial state zi for the sosfilt function that
-                 -- corresponds to the steady state of the step response.
-   sosfiltfilt   -- A forward-backward filter for second-order sections.
-   hilbert       -- Compute 1-D analytic signal, using the Hilbert transform.
-   hilbert2      -- Compute 2-D analytic signal, using the Hilbert transform.
-   envelope      -- Compute the envelope of a real- or complex-valued signal.
-
-   decimate      -- Downsample a signal.
-   detrend       -- Remove linear and/or constant trends from data.
-   resample      -- Resample using Fourier method.
-   resample_poly -- Resample using polyphase filtering method.
-   upfirdn       -- Upsample, apply FIR filter, downsample.
-
-Filter design
-=============
+Scalar functions optimization
+-----------------------------
 
 .. autosummary::
    :toctree: generated/
 
-   bilinear      -- Digital filter from an analog filter using
-                    -- the bilinear transform.
-   bilinear_zpk  -- Digital filter from an analog filter using
-                    -- the bilinear transform.
-   findfreqs     -- Find array of frequencies for computing filter response.
-   firls         -- FIR filter design using least-squares error minimization.
-   firwin        -- Windowed FIR filter design, with frequency response
-                    -- defined as pass and stop bands.
-   firwin2       -- Windowed FIR filter design, with arbitrary frequency
-                    -- response.
-   freqs         -- Analog filter frequency response from TF coefficients.
-   freqs_zpk     -- Analog filter frequency response from ZPK coefficients.
-   freqz         -- Digital filter frequency response from TF coefficients.
-   freqz_sos     -- Digital filter frequency response for SOS format filter.
-   freqz_zpk     -- Digital filter frequency response from ZPK coefficients.
-   gammatone     -- FIR and IIR gammatone filter design.
-   group_delay   -- Digital filter group delay.
-   iirdesign     -- IIR filter design given bands and gains.
-   iirfilter     -- IIR filter design given order and critical frequencies.
-   kaiser_atten  -- Compute the attenuation of a Kaiser FIR filter, given
-                    -- the number of taps and the transition width at
-                    -- discontinuities in the frequency response.
-   kaiser_beta   -- Compute the Kaiser parameter beta, given the desired
-                    -- FIR filter attenuation.
-   kaiserord     -- Design a Kaiser window to limit ripple and width of
-                    -- transition region.
-   minimum_phase -- Convert a linear phase FIR filter to minimum phase.
-   savgol_coeffs -- Compute the FIR filter coefficients for a Savitzky-Golay
-                    -- filter.
-   remez         -- Optimal FIR filter design.
+   minimize_scalar - Interface for minimizers of univariate functions
 
-   unique_roots  -- Unique roots and their multiplicities.
-   residue       -- Partial fraction expansion of b(s) / a(s).
-   residuez      -- Partial fraction expansion of b(z) / a(z).
-   invres        -- Inverse partial fraction expansion for analog filter.
-   invresz       -- Inverse partial fraction expansion for digital filter.
-   BadCoefficients  -- Warning on badly conditioned filter coefficients.
+The `minimize_scalar` function supports the following methods:
 
-Lower-level filter design functions:
+.. toctree::
+
+   optimize.minimize_scalar-brent
+   optimize.minimize_scalar-bounded
+   optimize.minimize_scalar-golden
+
+Local (multivariate) optimization
+---------------------------------
 
 .. autosummary::
    :toctree: generated/
 
-   abcd_normalize -- Check state-space matrices and ensure they are rank-2.
-   band_stop_obj  -- Band Stop Objective Function for order minimization.
-   besselap       -- Return (z,p,k) for analog prototype of Bessel filter.
-   buttap         -- Return (z,p,k) for analog prototype of Butterworth filter.
-   cheb1ap        -- Return (z,p,k) for type I Chebyshev filter.
-   cheb2ap        -- Return (z,p,k) for type II Chebyshev filter.
-   ellipap        -- Return (z,p,k) for analog prototype of elliptic filter.
-   lp2bp          -- Transform a lowpass filter prototype to a bandpass filter.
-   lp2bp_zpk      -- Transform a lowpass filter prototype to a bandpass filter.
-   lp2bs          -- Transform a lowpass filter prototype to a bandstop filter.
-   lp2bs_zpk      -- Transform a lowpass filter prototype to a bandstop filter.
-   lp2hp          -- Transform a lowpass filter prototype to a highpass filter.
-   lp2hp_zpk      -- Transform a lowpass filter prototype to a highpass filter.
-   lp2lp          -- Transform a lowpass filter prototype to a lowpass filter.
-   lp2lp_zpk      -- Transform a lowpass filter prototype to a lowpass filter.
-   normalize      -- Normalize polynomial representation of a transfer function.
+   minimize - Interface for minimizers of multivariate functions.
 
+The `minimize` function supports the following methods:
 
+.. toctree::
 
-Matlab-style IIR filter design
-==============================
+   optimize.minimize-neldermead
+   optimize.minimize-powell
+   optimize.minimize-cg
+   optimize.minimize-bfgs
+   optimize.minimize-newtoncg
+   optimize.minimize-lbfgsb
+   optimize.minimize-tnc
+   optimize.minimize-cobyla
+   optimize.minimize-cobyqa
+   optimize.minimize-slsqp
+   optimize.minimize-trustconstr
+   optimize.minimize-dogleg
+   optimize.minimize-trustncg
+   optimize.minimize-trustkrylov
+   optimize.minimize-trustexact
 
-.. autosummary::
-   :toctree: generated/
-
-   butter -- Butterworth
-   buttord
-   cheby1 -- Chebyshev Type I
-   cheb1ord
-   cheby2 -- Chebyshev Type II
-   cheb2ord
-   ellip -- Elliptic (Cauer)
-   ellipord
-   bessel -- Bessel (no order selection available -- try butterod)
-   iirnotch      -- Design second-order IIR notch digital filter.
-   iirpeak       -- Design second-order IIR peak (resonant) digital filter.
-   iircomb       -- Design IIR comb filter.
-
-Continuous-time linear systems
-==============================
+Constraints are passed to `minimize` function as a single object or
+as a list of objects from the following classes:
 
 .. autosummary::
    :toctree: generated/
 
-   lti              -- Continuous-time linear time invariant system base class.
-   StateSpace       -- Linear time invariant system in state space form.
-   TransferFunction -- Linear time invariant system in transfer function form.
-   ZerosPolesGain   -- Linear time invariant system in zeros, poles, gain form.
-   lsim             -- Continuous-time simulation of output to linear system.
-   impulse          -- Impulse response of linear, time-invariant (LTI) system.
-   step             -- Step response of continuous-time LTI system.
-   freqresp         -- Frequency response of a continuous-time LTI system.
-   bode             -- Bode magnitude and phase data (continuous-time LTI).
+   NonlinearConstraint - Class defining general nonlinear constraints.
+   LinearConstraint - Class defining general linear constraints.
 
-Discrete-time linear systems
-============================
+Simple bound constraints are handled separately and there is a special class
+for them:
 
 .. autosummary::
    :toctree: generated/
 
-   dlti             -- Discrete-time linear time invariant system base class.
-   StateSpace       -- Linear time invariant system in state space form.
-   TransferFunction -- Linear time invariant system in transfer function form.
-   ZerosPolesGain   -- Linear time invariant system in zeros, poles, gain form.
-   dlsim            -- Simulation of output to a discrete-time linear system.
-   dimpulse         -- Impulse response of a discrete-time LTI system.
-   dstep            -- Step response of a discrete-time LTI system.
-   dfreqresp        -- Frequency response of a discrete-time LTI system.
-   dbode            -- Bode magnitude and phase data (discrete-time LTI).
+   Bounds - Bound constraints.
 
-LTI representations
+Quasi-Newton strategies implementing `HessianUpdateStrategy`
+interface can be used to approximate the Hessian in `minimize`
+function (available only for the 'trust-constr' method). Available
+quasi-Newton methods implementing this interface are:
+
+.. autosummary::
+   :toctree: generated/
+
+   BFGS - Broyden-Fletcher-Goldfarb-Shanno (BFGS) Hessian update strategy.
+   SR1 - Symmetric-rank-1 Hessian update strategy.
+
+.. _global_optimization:
+
+Global optimization
+-------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   basinhopping - Basinhopping stochastic optimizer.
+   brute - Brute force searching optimizer.
+   differential_evolution - Stochastic optimizer using differential evolution.
+
+   shgo - Simplicial homology global optimizer.
+   dual_annealing - Dual annealing stochastic optimizer.
+   direct - DIRECT (Dividing Rectangles) optimizer.
+
+Least-squares and curve fitting
+===============================
+
+Nonlinear least-squares
+-----------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   least_squares - Solve a nonlinear least-squares problem with bounds on the variables.
+
+Linear least-squares
+--------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   nnls - Linear least-squares problem with non-negativity constraint.
+   lsq_linear - Linear least-squares problem with bound constraints.
+   isotonic_regression - Least squares problem of isotonic regression via PAVA.
+
+Curve fitting
+-------------
+
+.. autosummary::
+   :toctree: generated/
+
+   curve_fit -- Fit curve to a set of points.
+
+Root finding
+============
+
+Scalar functions
+----------------
+.. autosummary::
+   :toctree: generated/
+
+   root_scalar - Unified interface for nonlinear solvers of scalar functions.
+   brentq - quadratic interpolation Brent method.
+   brenth - Brent method, modified by Harris with hyperbolic extrapolation.
+   ridder - Ridder's method.
+   bisect - Bisection method.
+   newton - Newton's method (also Secant and Halley's methods).
+   toms748 - Alefeld, Potra & Shi Algorithm 748.
+   RootResults - The root finding result returned by some root finders.
+
+The `root_scalar` function supports the following methods:
+
+.. toctree::
+
+   optimize.root_scalar-brentq
+   optimize.root_scalar-brenth
+   optimize.root_scalar-bisect
+   optimize.root_scalar-ridder
+   optimize.root_scalar-newton
+   optimize.root_scalar-toms748
+   optimize.root_scalar-secant
+   optimize.root_scalar-halley
+
+
+
+The table below lists situations and appropriate methods, along with
+*asymptotic* convergence rates per iteration (and per function evaluation)
+for successful convergence to a simple root(*).
+Bisection is the slowest of them all, adding one bit of accuracy for each
+function evaluation, but is guaranteed to converge.
+The other bracketing methods all (eventually) increase the number of accurate
+bits by about 50% for every function evaluation.
+The derivative-based methods, all built on `newton`, can converge quite quickly
+if the initial value is close to the root.  They can also be applied to
+functions defined on (a subset of) the complex plane.
+
++-------------+----------+----------+-----------+-------------+-------------+----------------+
+| Domain of f | Bracket? |    Derivatives?      | Solvers     |        Convergence           |
++             +          +----------+-----------+             +-------------+----------------+
+|             |          | `fprime` | `fprime2` |             | Guaranteed? |  Rate(s)(*)    |
++=============+==========+==========+===========+=============+=============+================+
+| `R`         | Yes      | N/A      | N/A       | - bisection | - Yes       | - 1 "Linear"   |
+|             |          |          |           | - brentq    | - Yes       | - >=1, <= 1.62 |
+|             |          |          |           | - brenth    | - Yes       | - >=1, <= 1.62 |
+|             |          |          |           | - ridder    | - Yes       | - 2.0 (1.41)   |
+|             |          |          |           | - toms748   | - Yes       | - 2.7 (1.65)   |
++-------------+----------+----------+-----------+-------------+-------------+----------------+
+| `R` or `C`  | No       | No       | No        | secant      | No          | 1.62 (1.62)    |
++-------------+----------+----------+-----------+-------------+-------------+----------------+
+| `R` or `C`  | No       | Yes      | No        | newton      | No          | 2.00 (1.41)    |
++-------------+----------+----------+-----------+-------------+-------------+----------------+
+| `R` or `C`  | No       | Yes      | Yes       | halley      | No          | 3.00 (1.44)    |
++-------------+----------+----------+-----------+-------------+-------------+----------------+
+
+.. seealso::
+
+   `scipy.optimize.cython_optimize` -- Typed Cython versions of root finding functions
+
+Fixed point finding:
+
+.. autosummary::
+   :toctree: generated/
+
+   fixed_point - Single-variable fixed-point solver.
+
+Multidimensional
+----------------
+
+.. autosummary::
+   :toctree: generated/
+
+   root - Unified interface for nonlinear solvers of multivariate functions.
+
+The `root` function supports the following methods:
+
+.. toctree::
+
+   optimize.root-hybr
+   optimize.root-lm
+   optimize.root-broyden1
+   optimize.root-broyden2
+   optimize.root-anderson
+   optimize.root-linearmixing
+   optimize.root-diagbroyden
+   optimize.root-excitingmixing
+   optimize.root-krylov
+   optimize.root-dfsane
+   
+Elementwise Minimization and Root Finding
+=========================================
+
+.. toctree::
+   :maxdepth: 3
+
+   optimize.elementwise
+
+Linear programming / MILP
+=========================
+
+.. autosummary::
+   :toctree: generated/
+
+   milp -- Mixed integer linear programming.
+   linprog -- Unified interface for minimizers of linear programming problems.
+
+The `linprog` function supports the following methods:
+
+.. toctree::
+
+   optimize.linprog-simplex
+   optimize.linprog-interior-point
+   optimize.linprog-revised_simplex
+   optimize.linprog-highs-ipm
+   optimize.linprog-highs-ds
+   optimize.linprog-highs
+
+The simplex, interior-point, and revised simplex methods support callback
+functions, such as:
+
+.. autosummary::
+   :toctree: generated/
+
+   linprog_verbose_callback -- Sample callback function for linprog (simplex).
+
+Assignment problems
 ===================
 
 .. autosummary::
    :toctree: generated/
 
-   tf2zpk        -- Transfer function to zero-pole-gain.
-   tf2sos        -- Transfer function to second-order sections.
-   tf2ss         -- Transfer function to state-space.
-   zpk2tf        -- Zero-pole-gain to transfer function.
-   zpk2sos       -- Zero-pole-gain to second-order sections.
-   zpk2ss        -- Zero-pole-gain to state-space.
-   ss2tf         -- State-pace to transfer function.
-   ss2zpk        -- State-space to pole-zero-gain.
-   sos2zpk       -- Second-order sections to zero-pole-gain.
-   sos2tf        -- Second-order sections to transfer function.
-   cont2discrete -- Continuous-time to discrete-time LTI conversion.
-   place_poles   -- Pole placement.
+   linear_sum_assignment -- Solves the linear-sum assignment problem.
+   quadratic_assignment -- Solves the quadratic assignment problem.
 
-Waveforms
+The `quadratic_assignment` function supports the following methods:
+
+.. toctree::
+
+   optimize.qap-faq
+   optimize.qap-2opt
+
+Utilities
 =========
 
+Finite-difference approximation
+-------------------------------
+
 .. autosummary::
    :toctree: generated/
 
-   chirp        -- Frequency swept cosine signal, with several freq functions.
-   gausspulse   -- Gaussian modulated sinusoid.
-   max_len_seq  -- Maximum length sequence.
-   sawtooth     -- Periodic sawtooth.
-   square       -- Square wave.
-   sweep_poly   -- Frequency swept cosine signal; freq is arbitrary polynomial.
-   unit_impulse -- Discrete unit impulse.
+   approx_fprime - Approximate the gradient of a scalar function.
+   check_grad - Check the supplied derivative using finite differences.
 
-Window functions
+
+Line search
+-----------
+
+.. autosummary::
+   :toctree: generated/
+
+   bracket - Bracket a minimum, given two starting points.
+   line_search - Return a step that satisfies the strong Wolfe conditions.
+
+Hessian approximation
+---------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   LbfgsInvHessProduct - Linear operator for L-BFGS approximate inverse Hessian.
+   HessianUpdateStrategy - Interface for implementing Hessian update strategies
+
+Benchmark problems
+------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   rosen - The Rosenbrock function.
+   rosen_der - The derivative of the Rosenbrock function.
+   rosen_hess - The Hessian matrix of the Rosenbrock function.
+   rosen_hess_prod - Product of the Rosenbrock Hessian with a vector.
+
+Legacy functions
 ================
 
-For window functions, see the `scipy.signal.windows` namespace.
+The functions below are not recommended for use in new scripts;
+all of these methods are accessible via a newer, more consistent
+interfaces, provided by the interfaces above.
 
-In the `scipy.signal` namespace, there is a convenience function to
-obtain these windows by name:
+Optimization
+------------
 
-.. autosummary::
-   :toctree: generated/
-
-   get_window -- Return a window of a given length and type.
-
-Peak finding
-============
+General-purpose multivariate methods:
 
 .. autosummary::
    :toctree: generated/
 
-   argrelmin        -- Calculate the relative minima of data.
-   argrelmax        -- Calculate the relative maxima of data.
-   argrelextrema    -- Calculate the relative extrema of data.
-   find_peaks       -- Find a subset of peaks inside a signal.
-   find_peaks_cwt   -- Find peaks in a 1-D array with wavelet transformation.
-   peak_prominences -- Calculate the prominence of each peak in a signal.
-   peak_widths      -- Calculate the width of each peak in a signal.
+   fmin - Nelder-Mead Simplex algorithm.
+   fmin_powell - Powell's (modified) conjugate direction method.
+   fmin_cg - Non-linear (Polak-Ribiere) conjugate gradient algorithm.
+   fmin_bfgs - Quasi-Newton method (Broydon-Fletcher-Goldfarb-Shanno).
+   fmin_ncg - Line-search Newton Conjugate Gradient.
 
-Spectral analysis
-=================
+Constrained multivariate methods:
 
 .. autosummary::
    :toctree: generated/
 
-   periodogram    -- Compute a (modified) periodogram.
-   welch          -- Compute a periodogram using Welch's method.
-   csd            -- Compute the cross spectral density, using Welch's method.
-   coherence      -- Compute the magnitude squared coherence, using Welch's method.
-   spectrogram    -- Compute the spectrogram (legacy).
-   lombscargle    -- Computes the Lomb-Scargle periodogram.
-   vectorstrength -- Computes the vector strength.
-   ShortTimeFFT   -- Interface for calculating the \
-                     :ref:`Short Time Fourier Transform <tutorial_stft>` and \
-                     its inverse.
-   stft           -- Compute the Short Time Fourier Transform (legacy).
-   istft          -- Compute the Inverse Short Time Fourier Transform (legacy).
-   check_COLA     -- Check the COLA constraint for iSTFT reconstruction.
-   check_NOLA     -- Check the NOLA constraint for iSTFT reconstruction.
+   fmin_l_bfgs_b - Zhu, Byrd, and Nocedal's constrained optimizer.
+   fmin_tnc - Truncated Newton code.
+   fmin_cobyla - Constrained optimization by linear approximation.
+   fmin_slsqp - Minimization using sequential least-squares programming.
 
-Chirp Z-transform and Zoom FFT
-============================================
+Univariate (scalar) minimization methods:
 
 .. autosummary::
    :toctree: generated/
 
-   czt - Chirp z-transform convenience function
-   zoom_fft - Zoom FFT convenience function
-   CZT - Chirp z-transform function generator
-   ZoomFFT - Zoom FFT function generator
-   czt_points - Output the z-plane points sampled by a chirp z-transform
+   fminbound - Bounded minimization of a scalar function.
+   brent - 1-D function minimization using Brent method.
+   golden - 1-D function minimization using Golden Section method.
 
-The functions are simpler to use than the classes, but are less efficient when
-using the same transform on many arrays of the same length, since they
-repeatedly generate the same chirp signal with every call.  In these cases,
-use the classes to create a reusable function instead.
+Least-squares
+-------------
 
-"""
+.. autosummary::
+   :toctree: generated/
 
-from . import _sigtools, windows
-from ._waveforms import *
-from ._max_len_seq import max_len_seq
-from ._upfirdn import upfirdn
+   leastsq - Minimize the sum of squares of M equations in N unknowns.
 
-from ._spline import (
-    sepfir2d
-)
+Root finding
+------------
 
-from ._spline_filters import *
-from ._filter_design import *
-from ._fir_filter_design import *
-from ._ltisys import *
-from ._lti_conversion import *
-from ._signaltools import *
-from ._savitzky_golay import savgol_coeffs, savgol_filter
-from ._spectral_py import *
-from ._short_time_fft import *
-from ._peak_finding import *
-from ._czt import *
-from .windows import get_window  # keep this one in signal namespace
+General nonlinear solvers:
+
+.. autosummary::
+   :toctree: generated/
+
+   fsolve - Non-linear multivariable equation solver.
+   broyden1 - Broyden's first method.
+   broyden2 - Broyden's second method.
+   NoConvergence -  Exception raised when nonlinear solver does not converge.
+
+Large-scale nonlinear solvers:
+
+.. autosummary::
+   :toctree: generated/
+
+   newton_krylov
+   anderson
+
+   BroydenFirst
+   InverseJacobian
+   KrylovJacobian
+
+Simple iteration solvers:
+
+.. autosummary::
+   :toctree: generated/
+
+   excitingmixing
+   linearmixing
+   diagbroyden
+
+"""  # noqa: E501
+
+from ._optimize import *
+from ._minimize import *
+from ._root import *
+from ._root_scalar import *
+from ._minpack_py import *
+from ._zeros_py import *
+from ._lbfgsb_py import fmin_l_bfgs_b, LbfgsInvHessProduct
+from ._tnc import fmin_tnc
+from ._cobyla_py import fmin_cobyla
+from ._nonlin import *
+from ._slsqp_py import fmin_slsqp
+from ._nnls import nnls
+from ._basinhopping import basinhopping
+from ._linprog import linprog, linprog_verbose_callback
+from ._lsap import linear_sum_assignment
+from ._differentialevolution import differential_evolution
+from ._lsq import least_squares, lsq_linear
+from ._isotonic import isotonic_regression
+from ._constraints import (NonlinearConstraint,
+                           LinearConstraint,
+                           Bounds)
+from ._hessian_update_strategy import HessianUpdateStrategy, BFGS, SR1
+from ._shgo import shgo
+from ._dual_annealing import dual_annealing
+from ._qap import quadratic_assignment
+from ._direct_py import direct
+from ._milp import milp
 
 # Deprecated namespaces, to be removed in v2.0.0
 from . import (
-    bsplines, filter_design, fir_filter_design, lti_conversion, ltisys,
-    spectral, signaltools, waveforms, wavelets, spline
+    cobyla, lbfgsb, linesearch, minpack, minpack2, moduleTNC, nonlin, optimize,
+    slsqp, tnc, zeros
 )
 
-__all__ = [
-    s for s in dir() if not s.startswith("_")
-]
+__all__ = [s for s in dir() if not s.startswith('_')]
 
 from scipy._lib._testutils import PytestTester
 test = PytestTester(__name__)
