@@ -1,605 +1,561 @@
-import os
-from functools import partial
-
-import numpy
 import pytest
-from numpy.testing import assert_allclose
+import numpy as np
+import numpy.testing as npt
+import scipy.sparse
+import scipy.sparse.linalg as spla
 
-from sklearn._config import config_context
-from sklearn.base import BaseEstimator
-from sklearn.utils._array_api import (
-    _asarray_with_order,
-    _atol_for_type,
-    _average,
-    _convert_to_numpy,
-    _count_nonzero,
-    _estimator_with_converted_arrays,
-    _fill_or_add_to_diagonal,
-    _get_namespace_device_dtype_ids,
-    _is_numpy_namespace,
-    _isin,
-    _max_precision_float_dtype,
-    _nanmax,
-    _nanmean,
-    _nanmin,
-    _ravel,
-    device,
-    get_namespace,
-    get_namespace_and_device,
-    indexing_dtype,
-    np_compat,
-    yield_namespace_device_dtype_combinations,
+
+sparray_types = ('bsr', 'coo', 'csc', 'csr', 'dia', 'dok', 'lil')
+
+sparray_classes = [
+    getattr(scipy.sparse, f'{T}_array') for T in sparray_types
+]
+
+A = np.array([
+    [0, 1, 2, 0],
+    [2, 0, 0, 3],
+    [1, 4, 0, 0]
+])
+
+B = np.array([
+    [0, 1],
+    [2, 0]
+])
+
+X = np.array([
+    [1, 0, 0, 1],
+    [2, 1, 2, 0],
+    [0, 2, 1, 0],
+    [0, 0, 1, 2]
+], dtype=float)
+
+
+sparrays = [sparray(A) for sparray in sparray_classes]
+square_sparrays = [sparray(B) for sparray in sparray_classes]
+eig_sparrays = [sparray(X) for sparray in sparray_classes]
+
+parametrize_sparrays = pytest.mark.parametrize(
+    "A", sparrays, ids=sparray_types
 )
-from sklearn.utils._testing import (
-    SkipTest,
-    _array_api_for_tests,
-    assert_array_equal,
-    skip_if_array_api_compat_not_configured,
+parametrize_square_sparrays = pytest.mark.parametrize(
+    "B", square_sparrays, ids=sparray_types
 )
-from sklearn.utils.fixes import _IS_32BIT, CSR_CONTAINERS, np_version, parse_version
-
-
-@pytest.mark.parametrize("X", [numpy.asarray([1, 2, 3]), [1, 2, 3]])
-def test_get_namespace_ndarray_default(X):
-    """Check that get_namespace returns NumPy wrapper"""
-    xp_out, is_array_api_compliant = get_namespace(X)
-    assert xp_out is np_compat
-    assert not is_array_api_compliant
-
-
-def test_get_namespace_ndarray_creation_device():
-    """Check expected behavior with device and creation functions."""
-    X = numpy.asarray([1, 2, 3])
-    xp_out, _ = get_namespace(X)
-
-    full_array = xp_out.full(10, fill_value=2.0, device="cpu")
-    assert_allclose(full_array, [2.0] * 10)
-
-    with pytest.raises(ValueError, match="Unsupported device"):
-        xp_out.zeros(10, device="cuda")
-
-
-@skip_if_array_api_compat_not_configured
-def test_get_namespace_ndarray_with_dispatch():
-    """Test get_namespace on NumPy ndarrays."""
-
-    X_np = numpy.asarray([[1, 2, 3]])
-
-    with config_context(array_api_dispatch=True):
-        xp_out, is_array_api_compliant = get_namespace(X_np)
-        assert is_array_api_compliant
-
-        # In the future, NumPy should become API compliant library and we should have
-        # assert xp_out is numpy
-        assert xp_out is np_compat
-
-
-@skip_if_array_api_compat_not_configured
-def test_get_namespace_array_api(monkeypatch):
-    """Test get_namespace for ArrayAPI arrays."""
-    xp = pytest.importorskip("array_api_strict")
-
-    X_np = numpy.asarray([[1, 2, 3]])
-    X_xp = xp.asarray(X_np)
-    with config_context(array_api_dispatch=True):
-        xp_out, is_array_api_compliant = get_namespace(X_xp)
-        assert is_array_api_compliant
-
-        with pytest.raises(TypeError):
-            xp_out, is_array_api_compliant = get_namespace(X_xp, X_np)
-
-        def mock_getenv(key):
-            if key == "SCIPY_ARRAY_API":
-                return "0"
-
-        monkeypatch.setattr("os.environ.get", mock_getenv)
-        assert os.environ.get("SCIPY_ARRAY_API") != "1"
-        with pytest.raises(
-            RuntimeError,
-            match="scipy's own support is not enabled.",
-        ):
-            get_namespace(X_xp)
-
-
-@pytest.mark.parametrize("array_api", ["numpy", "array_api_strict"])
-def test_asarray_with_order(array_api):
-    """Test _asarray_with_order passes along order for NumPy arrays."""
-    xp = pytest.importorskip(array_api)
-
-    X = xp.asarray([1.2, 3.4, 5.1])
-    X_new = _asarray_with_order(X, order="F", xp=xp)
-
-    X_new_np = numpy.asarray(X_new)
-    assert X_new_np.flags["F_CONTIGUOUS"]
-
-
-@pytest.mark.parametrize(
-    "array_namespace, device_, dtype_name",
-    yield_namespace_device_dtype_combinations(),
-    ids=_get_namespace_device_dtype_ids,
+parametrize_eig_sparrays = pytest.mark.parametrize(
+    "X", eig_sparrays, ids=sparray_types
 )
-@pytest.mark.parametrize(
-    "weights, axis, normalize, expected",
-    [
-        # normalize = True
-        (None, None, True, 3.5),
-        (None, 0, True, [2.5, 3.5, 4.5]),
-        (None, 1, True, [2, 5]),
-        ([True, False], 0, True, [1, 2, 3]),  # boolean weights
-        ([True, True, False], 1, True, [1.5, 4.5]),  # boolean weights
-        ([0.4, 0.1], 0, True, [1.6, 2.6, 3.6]),
-        ([0.4, 0.2, 0.2], 1, True, [1.75, 4.75]),
-        ([1, 2], 0, True, [3, 4, 5]),
-        ([1, 1, 2], 1, True, [2.25, 5.25]),
-        ([[1, 2, 3], [1, 2, 3]], 0, True, [2.5, 3.5, 4.5]),
-        ([[1, 2, 1], [2, 2, 2]], 1, True, [2, 5]),
-        # normalize = False
-        (None, None, False, 21),
-        (None, 0, False, [5, 7, 9]),
-        (None, 1, False, [6, 15]),
-        ([True, False], 0, False, [1, 2, 3]),  # boolean weights
-        ([True, True, False], 1, False, [3, 9]),  # boolean weights
-        ([0.4, 0.1], 0, False, [0.8, 1.3, 1.8]),
-        ([0.4, 0.2, 0.2], 1, False, [1.4, 3.8]),
-        ([1, 2], 0, False, [9, 12, 15]),
-        ([1, 1, 2], 1, False, [9, 21]),
-        ([[1, 2, 3], [1, 2, 3]], 0, False, [5, 14, 27]),
-        ([[1, 2, 1], [2, 2, 2]], 1, False, [8, 30]),
-    ],
-)
-def test_average(
-    array_namespace, device_, dtype_name, weights, axis, normalize, expected
-):
-    xp = _array_api_for_tests(array_namespace, device_)
-    array_in = numpy.asarray([[1, 2, 3], [4, 5, 6]], dtype=dtype_name)
-    array_in = xp.asarray(array_in, device=device_)
-    if weights is not None:
-        weights = numpy.asarray(weights, dtype=dtype_name)
-        weights = xp.asarray(weights, device=device_)
-
-    with config_context(array_api_dispatch=True):
-        result = _average(array_in, axis=axis, weights=weights, normalize=normalize)
-
-    if np_version < parse_version("2.0.0") or np_version >= parse_version("2.1.0"):
-        # NumPy 2.0 has a problem with the device attribute of scalar arrays:
-        # https://github.com/numpy/numpy/issues/26850
-        assert device(array_in) == device(result)
-
-    result = _convert_to_numpy(result, xp)
-    assert_allclose(result, expected, atol=_atol_for_type(dtype_name))
 
 
-@pytest.mark.parametrize(
-    "array_namespace, device, dtype_name",
-    yield_namespace_device_dtype_combinations(include_numpy_namespaces=False),
-    ids=_get_namespace_device_dtype_ids,
-)
-def test_average_raises_with_wrong_dtype(array_namespace, device, dtype_name):
-    xp = _array_api_for_tests(array_namespace, device)
+@parametrize_sparrays
+def test_sum(A):
+    assert not isinstance(A.sum(axis=0), np.matrix), \
+        "Expected array, got matrix"
+    assert A.sum(axis=0).shape == (4,)
+    assert A.sum(axis=1).shape == (3,)
 
-    array_in = numpy.asarray([2, 0], dtype=dtype_name) + 1j * numpy.asarray(
-        [4, 3], dtype=dtype_name
+
+@parametrize_sparrays
+def test_mean(A):
+    assert not isinstance(A.mean(axis=1), np.matrix), \
+        "Expected array, got matrix"
+
+
+@parametrize_sparrays
+def test_min_max(A):
+    # Some formats don't support min/max operations, so we skip those here.
+    if hasattr(A, 'min'):
+        assert not isinstance(A.min(axis=1), np.matrix), \
+            "Expected array, got matrix"
+    if hasattr(A, 'max'):
+        assert not isinstance(A.max(axis=1), np.matrix), \
+            "Expected array, got matrix"
+    if hasattr(A, 'argmin'):
+        assert not isinstance(A.argmin(axis=1), np.matrix), \
+            "Expected array, got matrix"
+    if hasattr(A, 'argmax'):
+        assert not isinstance(A.argmax(axis=1), np.matrix), \
+            "Expected array, got matrix"
+
+
+@parametrize_sparrays
+def test_todense(A):
+    assert not isinstance(A.todense(), np.matrix), \
+        "Expected array, got matrix"
+
+
+@parametrize_sparrays
+def test_indexing(A):
+    if A.__class__.__name__[:3] in ('dia', 'coo', 'bsr'):
+        return
+
+    all_res = (
+        A[1, :],
+        A[:, 1],
+        A[1, [1, 2]],
+        A[[1, 2], 1],
+        A[[0]],
+        A[:, [1, 2]],
+        A[[1, 2], :],
+        A[1, [[1, 2]]],
+        A[[[1, 2]], 1],
     )
-    complex_type_name = array_in.dtype.name
-    if not hasattr(xp, complex_type_name):
-        # This is the case for cupy as of March 2024 for instance.
-        pytest.skip(f"{array_namespace} does not support {complex_type_name}")
 
-    array_in = xp.asarray(array_in, device=device)
-
-    err_msg = "Complex floating point values are not supported by average."
-    with (
-        config_context(array_api_dispatch=True),
-        pytest.raises(NotImplementedError, match=err_msg),
-    ):
-        _average(array_in)
+    for res in all_res:
+        assert isinstance(res, scipy.sparse.sparray), \
+            f"Expected sparse array, got {res._class__.__name__}"
 
 
+@parametrize_sparrays
+def test_dense_addition(A):
+    X = np.random.random(A.shape)
+    assert not isinstance(A + X, np.matrix), "Expected array, got matrix"
+
+
+@parametrize_sparrays
+def test_sparse_addition(A):
+    assert isinstance((A + A), scipy.sparse.sparray), "Expected array, got matrix"
+
+
+@parametrize_sparrays
+def test_elementwise_mul(A):
+    assert np.all((A * A).todense() == A.power(2).todense())
+
+
+@parametrize_sparrays
+def test_elementwise_rmul(A):
+    with pytest.raises(TypeError):
+        None * A
+
+    with pytest.raises(ValueError):
+        np.eye(3) * scipy.sparse.csr_array(np.arange(6).reshape(2, 3))
+
+    assert np.all((2 * A) == (A.todense() * 2))
+
+    assert np.all((A.todense() * A) == (A.todense() ** 2))
+
+
+@parametrize_sparrays
+def test_matmul(A):
+    assert np.all((A @ A.T).todense() == A.dot(A.T).todense())
+
+
+@parametrize_sparrays
+def test_power_operator(A):
+    assert isinstance((A**2), scipy.sparse.sparray), "Expected array, got matrix"
+
+    # https://github.com/scipy/scipy/issues/15948
+    npt.assert_equal((A**2).todense(), (A.todense())**2)
+
+    # power of zero is all ones (dense) so helpful msg exception
+    with pytest.raises(NotImplementedError, match="zero power"):
+        A**0
+
+
+@parametrize_sparrays
+def test_sparse_divide(A):
+    assert isinstance(A / A, np.ndarray)
+
+@parametrize_sparrays
+@pytest.mark.thread_unsafe
+def test_sparse_dense_divide(A):
+    with pytest.warns(RuntimeWarning):
+        assert isinstance((A / A.todense()), scipy.sparse.sparray)
+
+@parametrize_sparrays
+def test_dense_divide(A):
+    assert isinstance((A / 2), scipy.sparse.sparray), "Expected array, got matrix"
+
+
+@parametrize_sparrays
+def test_no_A_attr(A):
+    with pytest.raises(AttributeError):
+        A.A
+
+
+@parametrize_sparrays
+def test_no_H_attr(A):
+    with pytest.raises(AttributeError):
+        A.H
+
+
+@parametrize_sparrays
+def test_getrow_getcol(A):
+    assert isinstance(A._getcol(0), scipy.sparse.sparray)
+    assert isinstance(A._getrow(0), scipy.sparse.sparray)
+
+
+# -- linalg --
+
+@parametrize_sparrays
+def test_as_linearoperator(A):
+    L = spla.aslinearoperator(A)
+    npt.assert_allclose(L * [1, 2, 3, 4], A @ [1, 2, 3, 4])
+
+
+@parametrize_square_sparrays
+def test_inv(B):
+    if B.__class__.__name__[:3] != 'csc':
+        return
+
+    C = spla.inv(B)
+
+    assert isinstance(C, scipy.sparse.sparray)
+    npt.assert_allclose(C.todense(), np.linalg.inv(B.todense()))
+
+
+@parametrize_square_sparrays
+def test_expm(B):
+    if B.__class__.__name__[:3] != 'csc':
+        return
+
+    Bmat = scipy.sparse.csc_matrix(B)
+
+    C = spla.expm(B)
+
+    assert isinstance(C, scipy.sparse.sparray)
+    npt.assert_allclose(
+        C.todense(),
+        spla.expm(Bmat).todense()
+    )
+
+
+@parametrize_square_sparrays
+def test_expm_multiply(B):
+    if B.__class__.__name__[:3] != 'csc':
+        return
+
+    npt.assert_allclose(
+        spla.expm_multiply(B, np.array([1, 2])),
+        spla.expm(B) @ [1, 2]
+    )
+
+
+@parametrize_sparrays
+def test_norm(A):
+    C = spla.norm(A)
+    npt.assert_allclose(C, np.linalg.norm(A.todense()))
+
+
+@parametrize_square_sparrays
+def test_onenormest(B):
+    C = spla.onenormest(B)
+    npt.assert_allclose(C, np.linalg.norm(B.todense(), 1))
+
+
+@parametrize_square_sparrays
+def test_spsolve(B):
+    if B.__class__.__name__[:3] not in ('csc', 'csr'):
+        return
+
+    npt.assert_allclose(
+        spla.spsolve(B, [1, 2]),
+        np.linalg.solve(B.todense(), [1, 2])
+    )
+
+
+@pytest.mark.parametrize("fmt",["csr","csc"])
+def test_spsolve_triangular(fmt):
+    arr = [
+        [1, 0, 0, 0],
+        [2, 1, 0, 0],
+        [3, 2, 1, 0],
+        [4, 3, 2, 1],
+    ]
+    if fmt == "csr":
+      X = scipy.sparse.csr_array(arr)
+    else:
+      X = scipy.sparse.csc_array(arr)
+    spla.spsolve_triangular(X, [1, 2, 3, 4])
+
+
+@parametrize_square_sparrays
+def test_factorized(B):
+    if B.__class__.__name__[:3] != 'csc':
+        return
+
+    LU = spla.factorized(B)
+    npt.assert_allclose(
+        LU(np.array([1, 2])),
+        np.linalg.solve(B.todense(), [1, 2])
+    )
+
+
+@parametrize_square_sparrays
 @pytest.mark.parametrize(
-    "array_namespace, device, dtype_name",
-    yield_namespace_device_dtype_combinations(include_numpy_namespaces=True),
-    ids=_get_namespace_device_dtype_ids,
+    "solver",
+    ["bicg", "bicgstab", "cg", "cgs", "gmres", "lgmres", "minres", "qmr",
+     "gcrotmk", "tfqmr"]
 )
+def test_solvers(B, solver):
+    if solver == "minres":
+        kwargs = {}
+    else:
+        kwargs = {'atol': 1e-5}
+
+    x, info = getattr(spla, solver)(B, np.array([1, 2]), **kwargs)
+    assert info >= 0  # no errors, even if perhaps did not converge fully
+    npt.assert_allclose(x, [1, 1], atol=1e-1)
+
+
+@parametrize_sparrays
 @pytest.mark.parametrize(
-    "axis, weights, error, error_msg",
+    "solver",
+    ["lsqr", "lsmr"]
+)
+def test_lstsqr(A, solver):
+    x, *_ = getattr(spla, solver)(A, [1, 2, 3])
+    npt.assert_allclose(A @ x, [1, 2, 3])
+
+
+@parametrize_eig_sparrays
+def test_eigs(X):
+    e, v = spla.eigs(X, k=1)
+    npt.assert_allclose(
+        X @ v,
+        e[0] * v
+    )
+
+
+@parametrize_eig_sparrays
+def test_eigsh(X):
+    X = X + X.T
+    e, v = spla.eigsh(X, k=1)
+    npt.assert_allclose(
+        X @ v,
+        e[0] * v
+    )
+
+
+@parametrize_eig_sparrays
+def test_svds(X):
+    u, s, vh = spla.svds(X, k=3)
+    u2, s2, vh2 = np.linalg.svd(X.todense())
+    s = np.sort(s)
+    s2 = np.sort(s2[:3])
+    npt.assert_allclose(s, s2, atol=1e-3)
+
+
+def test_splu():
+    X = scipy.sparse.csc_array([
+        [1, 0, 0, 0],
+        [2, 1, 0, 0],
+        [3, 2, 1, 0],
+        [4, 3, 2, 1],
+    ])
+    LU = spla.splu(X)
+    npt.assert_allclose(
+        LU.solve(np.array([1, 2, 3, 4])),
+        np.asarray([1, 0, 0, 0], dtype=np.float64),
+        rtol=1e-14, atol=3e-16
+    )
+
+
+def test_spilu():
+    X = scipy.sparse.csc_array([
+        [1, 0, 0, 0],
+        [2, 1, 0, 0],
+        [3, 2, 1, 0],
+        [4, 3, 2, 1],
+    ])
+    LU = spla.spilu(X)
+    npt.assert_allclose(
+        LU.solve(np.array([1, 2, 3, 4])),
+        np.asarray([1, 0, 0, 0], dtype=np.float64),
+        rtol=1e-14, atol=3e-16
+    )
+
+
+@pytest.mark.parametrize(
+    "cls,indices_attrs",
+    [
+        (
+            scipy.sparse.csr_array,
+            ["indices", "indptr"],
+        ),
+        (
+            scipy.sparse.csc_array,
+            ["indices", "indptr"],
+        ),
+        (
+            scipy.sparse.coo_array,
+            ["row", "col"],
+        ),
+    ]
+)
+@pytest.mark.parametrize("expected_dtype", [np.int64, np.int32])
+def test_index_dtype_compressed(cls, indices_attrs, expected_dtype):
+    input_array = scipy.sparse.coo_array(np.arange(9).reshape(3, 3))
+    coo_tuple = (
+        input_array.data,
+        (
+            input_array.row.astype(expected_dtype),
+            input_array.col.astype(expected_dtype),
+        )
+    )
+
+    result = cls(coo_tuple)
+    for attr in indices_attrs:
+        assert getattr(result, attr).dtype == expected_dtype
+
+    result = cls(coo_tuple, shape=(3, 3))
+    for attr in indices_attrs:
+        assert getattr(result, attr).dtype == expected_dtype
+
+    if issubclass(cls, scipy.sparse._compressed._cs_matrix):
+        input_array_csr = input_array.tocsr()
+        csr_tuple = (
+            input_array_csr.data,
+            input_array_csr.indices.astype(expected_dtype),
+            input_array_csr.indptr.astype(expected_dtype),
+        )
+
+        result = cls(csr_tuple)
+        for attr in indices_attrs:
+            assert getattr(result, attr).dtype == expected_dtype
+
+        result = cls(csr_tuple, shape=(3, 3))
+        for attr in indices_attrs:
+            assert getattr(result, attr).dtype == expected_dtype
+
+
+def test_default_is_matrix_diags():
+    m = scipy.sparse.diags([0, 1, 2])
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_eye():
+    m = scipy.sparse.eye(3)
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_spdiags():
+    m = scipy.sparse.spdiags([1, 2, 3], 0, 3, 3)
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_identity():
+    m = scipy.sparse.identity(3)
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_kron_dense():
+    m = scipy.sparse.kron(
+        np.array([[1, 2], [3, 4]]), np.array([[4, 3], [2, 1]])
+    )
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_kron_sparse():
+    m = scipy.sparse.kron(
+        np.array([[1, 2], [3, 4]]), np.array([[1, 0], [0, 0]])
+    )
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_kronsum():
+    m = scipy.sparse.kronsum(
+        np.array([[1, 0], [0, 1]]), np.array([[0, 1], [1, 0]])
+    )
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_random():
+    m = scipy.sparse.random(3, 3)
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_default_is_matrix_rand():
+    m = scipy.sparse.rand(3, 3)
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+@pytest.mark.parametrize("fn", (scipy.sparse.hstack, scipy.sparse.vstack))
+def test_default_is_matrix_stacks(fn):
+    """Same idea as `test_default_construction_fn_matrices`, but for the
+    stacking creation functions."""
+    A = scipy.sparse.coo_matrix(np.eye(2))
+    B = scipy.sparse.coo_matrix([[0, 1], [1, 0]])
+    m = fn([A, B])
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_blocks_default_construction_fn_matrices():
+    """Same idea as `test_default_construction_fn_matrices`, but for the block
+    creation function"""
+    A = scipy.sparse.coo_matrix(np.eye(2))
+    B = scipy.sparse.coo_matrix([[2], [0]])
+    C = scipy.sparse.coo_matrix([[3]])
+
+    # block diag
+    m = scipy.sparse.block_diag((A, B, C))
+    assert not isinstance(m, scipy.sparse.sparray)
+
+    # bmat
+    m = scipy.sparse.bmat([[A, None], [None, C]])
+    assert not isinstance(m, scipy.sparse.sparray)
+
+
+def test_format_property():
+    for fmt in sparray_types:
+        arr_cls = getattr(scipy.sparse, f"{fmt}_array")
+        M = arr_cls([[1, 2]])
+        assert M.format == fmt
+        assert M._format == fmt
+        with pytest.raises(AttributeError):
+            M.format = "qqq"
+
+
+def test_issparse():
+    m = scipy.sparse.eye(3)
+    a = scipy.sparse.csr_array(m)
+    assert not isinstance(m, scipy.sparse.sparray)
+    assert isinstance(a, scipy.sparse.sparray)
+
+    # Both sparse arrays and sparse matrices should be sparse
+    assert scipy.sparse.issparse(a)
+    assert scipy.sparse.issparse(m)
+
+    # ndarray and array_likes are not sparse
+    assert not scipy.sparse.issparse(a.todense())
+    assert not scipy.sparse.issparse(m.todense())
+
+
+def test_isspmatrix():
+    m = scipy.sparse.eye(3)
+    a = scipy.sparse.csr_array(m)
+    assert not isinstance(m, scipy.sparse.sparray)
+    assert isinstance(a, scipy.sparse.sparray)
+
+    # Should only be true for sparse matrices, not sparse arrays
+    assert not scipy.sparse.isspmatrix(a)
+    assert scipy.sparse.isspmatrix(m)
+
+    # ndarray and array_likes are not sparse
+    assert not scipy.sparse.isspmatrix(a.todense())
+    assert not scipy.sparse.isspmatrix(m.todense())
+
+
+@pytest.mark.parametrize(
+    ("fmt", "fn"),
     (
-        (
-            None,
-            [1, 2],
-            TypeError,
-            "Axis must be specified",
-        ),
-        (
-            0,
-            [[1, 2]],
-            # NumPy 2 raises ValueError, NumPy 1 raises TypeError
-            (ValueError, TypeError),
-            "weights",  # the message is different for NumPy 1 and 2...
-        ),
-        (
-            0,
-            [1, 2, 3, 4],
-            ValueError,
-            "weights",
-        ),
-        (0, [-1, 1], ZeroDivisionError, "Weights sum to zero, can't be normalized"),
+        ("bsr", scipy.sparse.isspmatrix_bsr),
+        ("coo", scipy.sparse.isspmatrix_coo),
+        ("csc", scipy.sparse.isspmatrix_csc),
+        ("csr", scipy.sparse.isspmatrix_csr),
+        ("dia", scipy.sparse.isspmatrix_dia),
+        ("dok", scipy.sparse.isspmatrix_dok),
+        ("lil", scipy.sparse.isspmatrix_lil),
     ),
 )
-def test_average_raises_with_invalid_parameters(
-    array_namespace, device, dtype_name, axis, weights, error, error_msg
-):
-    xp = _array_api_for_tests(array_namespace, device)
-
-    array_in = numpy.asarray([[1, 2, 3], [4, 5, 6]], dtype=dtype_name)
-    array_in = xp.asarray(array_in, device=device)
-
-    weights = numpy.asarray(weights, dtype=dtype_name)
-    weights = xp.asarray(weights, device=device)
-
-    with config_context(array_api_dispatch=True), pytest.raises(error, match=error_msg):
-        _average(array_in, axis=axis, weights=weights)
-
-
-def test_device_none_if_no_input():
-    assert device() is None
-
-    assert device(None, "name") is None
-
-
-@skip_if_array_api_compat_not_configured
-def test_device_inspection():
-    class Device:
-        def __init__(self, name):
-            self.name = name
-
-        def __eq__(self, device):
-            return self.name == device.name
-
-        def __hash__(self):
-            raise TypeError("Device object is not hashable")
-
-        def __str__(self):
-            return self.name
-
-    class Array:
-        def __init__(self, device_name):
-            self.device = Device(device_name)
-
-    # Sanity check: ensure our Device mock class is non hashable, to
-    # accurately account for non-hashable device objects in some array
-    # libraries, because of which the `device` inspection function shouldn't
-    # make use of hash lookup tables (in particular, not use `set`)
-    with pytest.raises(TypeError):
-        hash(Array("device").device)
-
-    # If array API dispatch is disabled the device should be ignored. Erroring
-    # early for different devices would prevent the np.asarray conversion to
-    # happen. For example, `r2_score(np.ones(5), torch.ones(5))` should work
-    # fine with array API disabled.
-    assert device(Array("cpu"), Array("mygpu")) is None
-
-    # Test that ValueError is raised if on different devices and array API dispatch is
-    # enabled.
-    err_msg = "Input arrays use different devices: cpu, mygpu"
-    with config_context(array_api_dispatch=True):
-        with pytest.raises(ValueError, match=err_msg):
-            device(Array("cpu"), Array("mygpu"))
-
-        # Test expected value is returned otherwise
-        array1 = Array("device")
-        array2 = Array("device")
-
-        assert array1.device == device(array1)
-        assert array1.device == device(array1, array2)
-        assert array1.device == device(array1, array1, array2)
-
-
-# TODO: add cupy to the list of libraries once the following upstream issue
-# has been fixed:
-# https://github.com/cupy/cupy/issues/8180
-@skip_if_array_api_compat_not_configured
-@pytest.mark.parametrize("library", ["numpy", "array_api_strict", "torch"])
-@pytest.mark.parametrize(
-    "X,reduction,expected",
-    [
-        ([1, 2, numpy.nan], _nanmin, 1),
-        ([1, -2, -numpy.nan], _nanmin, -2),
-        ([numpy.inf, numpy.inf], _nanmin, numpy.inf),
-        (
-            [[1, 2, 3], [numpy.nan, numpy.nan, numpy.nan], [4, 5, 6.0]],
-            partial(_nanmin, axis=0),
-            [1.0, 2.0, 3.0],
-        ),
-        (
-            [[1, 2, 3], [numpy.nan, numpy.nan, numpy.nan], [4, 5, 6.0]],
-            partial(_nanmin, axis=1),
-            [1.0, numpy.nan, 4.0],
-        ),
-        ([1, 2, numpy.nan], _nanmax, 2),
-        ([1, 2, numpy.nan], _nanmax, 2),
-        ([-numpy.inf, -numpy.inf], _nanmax, -numpy.inf),
-        (
-            [[1, 2, 3], [numpy.nan, numpy.nan, numpy.nan], [4, 5, 6.0]],
-            partial(_nanmax, axis=0),
-            [4.0, 5.0, 6.0],
-        ),
-        (
-            [[1, 2, 3], [numpy.nan, numpy.nan, numpy.nan], [4, 5, 6.0]],
-            partial(_nanmax, axis=1),
-            [3.0, numpy.nan, 6.0],
-        ),
-        ([1, 2, numpy.nan], _nanmean, 1.5),
-        ([1, -2, -numpy.nan], _nanmean, -0.5),
-        ([-numpy.inf, -numpy.inf], _nanmean, -numpy.inf),
-        (
-            [[1, 2, 3], [numpy.nan, numpy.nan, numpy.nan], [4, 5, 6.0]],
-            partial(_nanmean, axis=0),
-            [2.5, 3.5, 4.5],
-        ),
-        (
-            [[1, 2, 3], [numpy.nan, numpy.nan, numpy.nan], [4, 5, 6.0]],
-            partial(_nanmean, axis=1),
-            [2.0, numpy.nan, 5.0],
-        ),
-    ],
-)
-def test_nan_reductions(library, X, reduction, expected):
-    """Check NaN reductions like _nanmin and _nanmax"""
-    xp = pytest.importorskip(library)
-
-    with config_context(array_api_dispatch=True):
-        result = reduction(xp.asarray(X))
-
-    result = _convert_to_numpy(result, xp)
-    assert_allclose(result, expected)
-
-
-@pytest.mark.parametrize(
-    "namespace, _device, _dtype",
-    yield_namespace_device_dtype_combinations(),
-    ids=_get_namespace_device_dtype_ids,
-)
-def test_ravel(namespace, _device, _dtype):
-    xp = _array_api_for_tests(namespace, _device)
-
-    array = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]
-    array_xp = xp.asarray(array, device=_device)
-    with config_context(array_api_dispatch=True):
-        result = _ravel(array_xp)
-
-    result = _convert_to_numpy(result, xp)
-    expected = numpy.ravel(array, order="C")
-
-    assert_allclose(expected, result)
-
-    if _is_numpy_namespace(xp):
-        assert numpy.asarray(result).flags["C_CONTIGUOUS"]
-
-
-@skip_if_array_api_compat_not_configured
-@pytest.mark.parametrize("library", ["cupy", "torch"])
-def test_convert_to_numpy_gpu(library):  # pragma: nocover
-    """Check convert_to_numpy for GPU backed libraries."""
-    xp = pytest.importorskip(library)
-
-    if library == "torch":
-        if not xp.backends.cuda.is_built():
-            pytest.skip("test requires cuda")
-        X_gpu = xp.asarray([1.0, 2.0, 3.0], device="cuda")
-    else:
-        X_gpu = xp.asarray([1.0, 2.0, 3.0])
-
-    X_cpu = _convert_to_numpy(X_gpu, xp=xp)
-    expected_output = numpy.asarray([1.0, 2.0, 3.0])
-    assert_allclose(X_cpu, expected_output)
-
-
-def test_convert_to_numpy_cpu():
-    """Check convert_to_numpy for PyTorch CPU arrays."""
-    torch = pytest.importorskip("torch")
-    X_torch = torch.asarray([1.0, 2.0, 3.0], device="cpu")
-
-    X_cpu = _convert_to_numpy(X_torch, xp=torch)
-    expected_output = numpy.asarray([1.0, 2.0, 3.0])
-    assert_allclose(X_cpu, expected_output)
-
-
-class SimpleEstimator(BaseEstimator):
-    def fit(self, X, y=None):
-        self.X_ = X
-        self.n_features_ = X.shape[0]
-        return self
-
-
-@skip_if_array_api_compat_not_configured
-@pytest.mark.parametrize(
-    "array_namespace, converter",
-    [
-        ("torch", lambda array: array.cpu().numpy()),
-        ("array_api_strict", lambda array: numpy.asarray(array)),
-        ("cupy", lambda array: array.get()),
-    ],
-)
-def test_convert_estimator_to_ndarray(array_namespace, converter):
-    """Convert estimator attributes to ndarray."""
-    xp = pytest.importorskip(array_namespace)
-
-    X = xp.asarray([[1.3, 4.5]])
-    est = SimpleEstimator().fit(X)
-
-    new_est = _estimator_with_converted_arrays(est, converter)
-    assert isinstance(new_est.X_, numpy.ndarray)
-
-
-@skip_if_array_api_compat_not_configured
-def test_convert_estimator_to_array_api():
-    """Convert estimator attributes to ArrayAPI arrays."""
-    xp = pytest.importorskip("array_api_strict")
-
-    X_np = numpy.asarray([[1.3, 4.5]])
-    est = SimpleEstimator().fit(X_np)
-
-    new_est = _estimator_with_converted_arrays(est, lambda array: xp.asarray(array))
-    assert hasattr(new_est.X_, "__array_namespace__")
-
-
-@pytest.mark.parametrize(
-    "namespace, _device, _dtype",
-    yield_namespace_device_dtype_combinations(),
-    ids=_get_namespace_device_dtype_ids,
-)
-def test_indexing_dtype(namespace, _device, _dtype):
-    xp = _array_api_for_tests(namespace, _device)
-
-    if _IS_32BIT:
-        assert indexing_dtype(xp) == xp.int32
-    else:
-        assert indexing_dtype(xp) == xp.int64
-
-
-@pytest.mark.parametrize(
-    "namespace, _device, _dtype",
-    yield_namespace_device_dtype_combinations(),
-    ids=_get_namespace_device_dtype_ids,
-)
-def test_max_precision_float_dtype(namespace, _device, _dtype):
-    xp = _array_api_for_tests(namespace, _device)
-    expected_dtype = xp.float32 if _device == "mps" else xp.float64
-    assert _max_precision_float_dtype(xp, _device) == expected_dtype
-
-
-@pytest.mark.parametrize(
-    "array_namespace, device, _",
-    yield_namespace_device_dtype_combinations(),
-    ids=_get_namespace_device_dtype_ids,
-)
-@pytest.mark.parametrize("invert", [True, False])
-@pytest.mark.parametrize("assume_unique", [True, False])
-@pytest.mark.parametrize("element_size", [6, 10, 14])
-@pytest.mark.parametrize("int_dtype", ["int16", "int32", "int64", "uint8"])
-def test_isin(
-    array_namespace, device, _, invert, assume_unique, element_size, int_dtype
-):
-    xp = _array_api_for_tests(array_namespace, device)
-    r = element_size // 2
-    element = 2 * numpy.arange(element_size).reshape((r, 2)).astype(int_dtype)
-    test_elements = numpy.array(numpy.arange(14), dtype=int_dtype)
-    element_xp = xp.asarray(element, device=device)
-    test_elements_xp = xp.asarray(test_elements, device=device)
-    expected = numpy.isin(
-        element=element,
-        test_elements=test_elements,
-        assume_unique=assume_unique,
-        invert=invert,
-    )
-    with config_context(array_api_dispatch=True):
-        result = _isin(
-            element=element_xp,
-            test_elements=test_elements_xp,
-            xp=xp,
-            assume_unique=assume_unique,
-            invert=invert,
-        )
-
-    assert_array_equal(_convert_to_numpy(result, xp=xp), expected)
-
-
-@pytest.mark.skipif(
-    os.environ.get("SCIPY_ARRAY_API") != "1", reason="SCIPY_ARRAY_API not set to 1."
-)
-def test_get_namespace_and_device():
-    # Use torch as a library with custom Device objects:
-    torch = pytest.importorskip("torch")
-
-    from sklearn.externals.array_api_compat import torch as torch_compat
-
-    some_torch_tensor = torch.arange(3, device="cpu")
-    some_numpy_array = numpy.arange(3)
-
-    # When dispatch is disabled, get_namespace_and_device should return the
-    # default NumPy wrapper namespace and "cpu" device. Our code will handle such
-    # inputs via the usual __array__ interface without attempting to dispatch
-    # via the array API.
-    namespace, is_array_api, device = get_namespace_and_device(some_torch_tensor)
-    assert namespace is get_namespace(some_numpy_array)[0]
-    assert not is_array_api
-    assert device is None
-
-    # Otherwise, expose the torch namespace and device via array API compat
-    # wrapper.
-    with config_context(array_api_dispatch=True):
-        namespace, is_array_api, device = get_namespace_and_device(some_torch_tensor)
-        assert namespace is torch_compat
-        assert is_array_api
-        assert device == some_torch_tensor.device
-
-
-@pytest.mark.parametrize(
-    "array_namespace, device_, dtype_name",
-    yield_namespace_device_dtype_combinations(),
-    ids=_get_namespace_device_dtype_ids,
-)
-@pytest.mark.parametrize("csr_container", CSR_CONTAINERS)
-@pytest.mark.parametrize("axis", [0, 1, None, -1, -2])
-@pytest.mark.parametrize("sample_weight_type", [None, "int", "float"])
-def test_count_nonzero(
-    array_namespace, device_, dtype_name, csr_container, axis, sample_weight_type
-):
-    from sklearn.utils.sparsefuncs import count_nonzero as sparse_count_nonzero
-
-    xp = _array_api_for_tests(array_namespace, device_)
-    array = numpy.array([[0, 3, 0], [2, -1, 0], [0, 0, 0], [9, 8, 7], [4, 0, 5]])
-    if sample_weight_type == "int":
-        sample_weight = numpy.asarray([1, 2, 2, 3, 1])
-    elif sample_weight_type == "float":
-        sample_weight = numpy.asarray([0.5, 1.5, 0.8, 3.2, 2.4], dtype=dtype_name)
-    else:
-        sample_weight = None
-    expected = sparse_count_nonzero(
-        csr_container(array), axis=axis, sample_weight=sample_weight
-    )
-    array_xp = xp.asarray(array, device=device_)
-
-    with config_context(array_api_dispatch=True):
-        result = _count_nonzero(
-            array_xp, axis=axis, sample_weight=sample_weight, xp=xp, device=device_
-        )
-
-    assert_allclose(_convert_to_numpy(result, xp=xp), expected)
-
-    if np_version < parse_version("2.0.0") or np_version >= parse_version("2.1.0"):
-        # NumPy 2.0 has a problem with the device attribute of scalar arrays:
-        # https://github.com/numpy/numpy/issues/26850
-        assert device(array_xp) == device(result)
-
-
-@pytest.mark.parametrize(
-    "array_namespace, device_, dtype_name",
-    yield_namespace_device_dtype_combinations(),
-    ids=_get_namespace_device_dtype_ids,
-)
-@pytest.mark.parametrize("wrap", [True, False])
-def test_fill_or_add_to_diagonal(array_namespace, device_, dtype_name, wrap):
-    xp = _array_api_for_tests(array_namespace, device_)
-
-    array_np = numpy.zeros((5, 4), dtype=dtype_name)
-    array_xp = xp.asarray(array_np.copy(), device=device_)
-
-    numpy.fill_diagonal(array_np, val=1, wrap=wrap)
-    with config_context(array_api_dispatch=True):
-        _fill_or_add_to_diagonal(array_xp, value=1, xp=xp, add_value=False, wrap=wrap)
-
-    assert_array_equal(_convert_to_numpy(array_xp, xp=xp), array_np)
-
-
-@pytest.mark.parametrize("csr_container", CSR_CONTAINERS)
-@pytest.mark.parametrize("dispatch", [True, False])
-def test_sparse_device(csr_container, dispatch):
-    a, b = csr_container(numpy.array([[1]])), csr_container(numpy.array([[2]]))
-    if dispatch and os.environ.get("SCIPY_ARRAY_API") is None:
-        raise SkipTest("SCIPY_ARRAY_API is not set: not checking array_api input")
-    with config_context(array_api_dispatch=dispatch):
-        assert device(a, b) is None
-        assert device(a, numpy.array([1])) is None
-        assert get_namespace_and_device(a, b)[2] is None
-        assert get_namespace_and_device(a, numpy.array([1]))[2] is None
+def test_isspmatrix_format(fmt, fn):
+    m = scipy.sparse.eye(3, format=fmt)
+    a = scipy.sparse.csr_array(m).asformat(fmt)
+    assert not isinstance(m, scipy.sparse.sparray)
+    assert isinstance(a, scipy.sparse.sparray)
+
+    # Should only be true for sparse matrices, not sparse arrays
+    assert not fn(a)
+    assert fn(m)
+
+    # ndarray and array_likes are not sparse
+    assert not fn(a.todense())
+    assert not fn(m.todense())
