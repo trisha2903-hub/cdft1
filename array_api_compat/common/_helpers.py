@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Optional, Union, Any
-    from ._typing import Array, Device, Namespace
+    from ._typing import Array, Device
 
 import sys
 import math
 import inspect
 import warnings
 
-def _is_jax_zero_gradient_array(x: object) -> bool:
+def _is_jax_zero_gradient_array(x):
     """Return True if `x` is a zero-gradient array.
 
     These arrays are a design quirk of Jax that may one day be removed.
@@ -32,8 +32,7 @@ def _is_jax_zero_gradient_array(x: object) -> bool:
 
     return isinstance(x, np.ndarray) and x.dtype == jax.float0
 
-
-def is_numpy_array(x: object) -> bool:
+def is_numpy_array(x):
     """
     Return True if `x` is a NumPy array.
 
@@ -64,8 +63,7 @@ def is_numpy_array(x: object) -> bool:
     return (isinstance(x, (np.ndarray, np.generic))
             and not _is_jax_zero_gradient_array(x))
 
-
-def is_cupy_array(x: object) -> bool:
+def is_cupy_array(x):
     """
     Return True if `x` is a CuPy array.
 
@@ -93,10 +91,9 @@ def is_cupy_array(x: object) -> bool:
     import cupy as cp
 
     # TODO: Should we reject ndarray subclasses?
-    return isinstance(x, cp.ndarray)
+    return isinstance(x, (cp.ndarray, cp.generic))
 
-
-def is_torch_array(x: object) -> bool:
+def is_torch_array(x):
     """
     Return True if `x` is a PyTorch tensor.
 
@@ -123,8 +120,7 @@ def is_torch_array(x: object) -> bool:
     # TODO: Should we reject ndarray subclasses?
     return isinstance(x, torch.Tensor)
 
-
-def is_ndonnx_array(x: object) -> bool:
+def is_ndonnx_array(x):
     """
     Return True if `x` is a ndonnx Array.
 
@@ -151,8 +147,7 @@ def is_ndonnx_array(x: object) -> bool:
 
     return isinstance(x, ndx.Array)
 
-
-def is_dask_array(x: object) -> bool:
+def is_dask_array(x):
     """
     Return True if `x` is a dask.array Array.
 
@@ -179,8 +174,7 @@ def is_dask_array(x: object) -> bool:
 
     return isinstance(x, dask.array.Array)
 
-
-def is_jax_array(x: object) -> bool:
+def is_jax_array(x):
     """
     Return True if `x` is a JAX array.
 
@@ -207,7 +201,6 @@ def is_jax_array(x: object) -> bool:
     import jax
 
     return isinstance(x, jax.Array) or _is_jax_zero_gradient_array(x)
-
 
 def is_pydata_sparse_array(x) -> bool:
     """
@@ -238,8 +231,7 @@ def is_pydata_sparse_array(x) -> bool:
     # TODO: Account for other backends.
     return isinstance(x, sparse.SparseArray)
 
-
-def is_array_api_obj(x: object) -> bool:
+def is_array_api_obj(x):
     """
     Return True if `x` is an array API compatible array object.
 
@@ -262,11 +254,9 @@ def is_array_api_obj(x: object) -> bool:
         or is_pydata_sparse_array(x) \
         or hasattr(x, '__array_namespace__')
 
-
-def _compat_module_name() -> str:
+def _compat_module_name():
     assert __name__.endswith('.common._helpers')
     return __name__.removesuffix('.common._helpers')
-
 
 def is_numpy_namespace(xp) -> bool:
     """
@@ -288,7 +278,6 @@ def is_numpy_namespace(xp) -> bool:
     """
     return xp.__name__ in {'numpy', _compat_module_name() + '.numpy'}
 
-
 def is_cupy_namespace(xp) -> bool:
     """
     Returns True if `xp` is a CuPy namespace.
@@ -308,7 +297,6 @@ def is_cupy_namespace(xp) -> bool:
     is_array_api_strict_namespace
     """
     return xp.__name__ in {'cupy', _compat_module_name() + '.cupy'}
-
 
 def is_torch_namespace(xp) -> bool:
     """
@@ -331,7 +319,7 @@ def is_torch_namespace(xp) -> bool:
     return xp.__name__ in {'torch', _compat_module_name() + '.torch'}
 
 
-def is_ndonnx_namespace(xp) -> bool:
+def is_ndonnx_namespace(xp):
     """
     Returns True if `xp` is an NDONNX namespace.
 
@@ -349,8 +337,7 @@ def is_ndonnx_namespace(xp) -> bool:
     """
     return xp.__name__ == 'ndonnx'
 
-
-def is_dask_namespace(xp) -> bool:
+def is_dask_namespace(xp):
     """
     Returns True if `xp` is a Dask namespace.
 
@@ -370,8 +357,7 @@ def is_dask_namespace(xp) -> bool:
     """
     return xp.__name__ in {'dask.array', _compat_module_name() + '.dask.array'}
 
-
-def is_jax_namespace(xp) -> bool:
+def is_jax_namespace(xp):
     """
     Returns True if `xp` is a JAX namespace.
 
@@ -392,8 +378,7 @@ def is_jax_namespace(xp) -> bool:
     """
     return xp.__name__ in {'jax.numpy', 'jax.experimental.array_api'}
 
-
-def is_pydata_sparse_namespace(xp) -> bool:
+def is_pydata_sparse_namespace(xp):
     """
     Returns True if `xp` is a pydata/sparse namespace.
 
@@ -411,8 +396,7 @@ def is_pydata_sparse_namespace(xp) -> bool:
     """
     return xp.__name__ == 'sparse'
 
-
-def is_array_api_strict_namespace(xp) -> bool:
+def is_array_api_strict_namespace(xp):
     """
     Returns True if `xp` is an array-api-strict namespace.
 
@@ -430,28 +414,25 @@ def is_array_api_strict_namespace(xp) -> bool:
     """
     return xp.__name__ == 'array_api_strict'
 
-
-def _check_api_version(api_version: str) -> None:
-    if api_version in ['2021.12', '2022.12', '2023.12']:
-        warnings.warn(f"The {api_version} version of the array API specification was requested but the returned namespace is actually version 2024.12")
+def _check_api_version(api_version):
+    if api_version in ['2021.12', '2022.12']:
+        warnings.warn(f"The {api_version} version of the array API specification was requested but the returned namespace is actually version 2023.12")
     elif api_version is not None and api_version not in ['2021.12', '2022.12',
-                                                         '2023.12', '2024.12']:
-        raise ValueError("Only the 2024.12 version of the array API specification is currently supported")
+                                                         '2023.12']:
+        raise ValueError("Only the 2023.12 version of the array API specification is currently supported")
 
-
-def array_namespace(*xs, api_version=None, use_compat=None) -> Namespace:
+def array_namespace(*xs, api_version=None, use_compat=None):
     """
     Get the array API compatible namespace for the arrays `xs`.
 
     Parameters
     ----------
     xs: arrays
-        one or more arrays. xs can also be Python scalars (bool, int, float,
-        complex, or None), which are ignored.
+        one or more arrays.
 
     api_version: str
         The newest version of the spec that you need support for (currently
-        the compat library wrapped APIs support v2024.12).
+        the compat library wrapped APIs support v2023.12).
 
     use_compat: bool or None
         If None (the default), the native namespace will be returned if it is
@@ -574,8 +555,6 @@ def array_namespace(*xs, api_version=None, use_compat=None) -> Namespace:
             if use_compat is True:
                 raise ValueError("The given array does not have an array-api-compat wrapper")
             namespaces.add(x.__array_namespace__(api_version=api_version))
-        elif isinstance(x, (bool, int, float, complex, type(None))):
-            continue
         else:
             # TODO: Support Python scalars?
             raise TypeError(f"{type(x).__name__} is not a supported array type")
@@ -648,24 +627,24 @@ def device(x: Array, /) -> Device:
     if is_numpy_array(x):
         return "cpu"
     elif is_dask_array(x):
-        # Peek at the metadata of the Dask array to determine type
-        if is_numpy_array(x._meta):
-            # Must be on CPU since backed by numpy
-            return "cpu"
+        # Peek at the metadata of the jax array to determine type
+        try:
+            import numpy as np
+            if isinstance(x._meta, np.ndarray):
+                # Must be on CPU since backed by numpy
+                return "cpu"
+        except ImportError:
+            pass
         return _DASK_DEVICE
     elif is_jax_array(x):
-        # FIXME Jitted JAX arrays do not have a device attribute
-        #       https://github.com/jax-ml/jax/issues/26000
-        #       Return None in this case. Note that this workaround breaks
-        #       the standard and will result in new arrays being created on the
-        #       default device instead of the same device as the input array(s).
-        x_device = getattr(x, 'device', None)
-        # Older JAX releases had .device() as a method, which has been replaced
-        # with a property in accordance with the standard.
-        if inspect.ismethod(x_device):
-            return x_device()
+        # JAX has .device() as a method, but it is being deprecated so that it
+        # can become a property, in accordance with the standard. In order for
+        # this function to not break when JAX makes the flip, we check for
+        # both here.
+        if inspect.ismethod(x.device):
+            return x.device()
         else:
-            return x_device
+            return x.device
     elif is_pydata_sparse_array(x):
         # `sparse` will gain `.device`, so check for this first.
         x_device = getattr(x, 'device', None)
@@ -796,11 +775,8 @@ def to_device(x: Array, device: Device, /, *, stream: Optional[Union[int, Any]] 
         raise ValueError(f"Unsupported device {device!r}")
     elif is_jax_array(x):
         if not hasattr(x, "__array_namespace__"):
-            # In JAX v0.4.31 and older, this import adds to_device method to x...
+            # In JAX v0.4.31 and older, this import adds to_device method to x.
             import jax.experimental.array_api # noqa: F401
-            # ... but only on eager JAX. It won't work inside jax.jit.
-            if not hasattr(x, "to_device"):
-                return x
         return x.to_device(device, stream=stream)
     elif is_pydata_sparse_array(x) and device == _device(x):
         # Perform trivial check to return the same array if
@@ -808,103 +784,19 @@ def to_device(x: Array, device: Device, /, *, stream: Optional[Union[int, Any]] 
         return x
     return x.to_device(device, stream=stream)
 
-
-def size(x: Array) -> int | None:
+def size(x):
     """
     Return the total number of elements of x.
 
     This is equivalent to `x.size` according to the `standard
     <https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.size.html>`__.
-
     This helper is included because PyTorch defines `size` in an
     :external+torch:meth:`incompatible way <torch.Tensor.size>`.
-    It also fixes dask.array's behaviour which returns nan for unknown sizes, whereas
-    the standard requires None.
+
     """
-    # Lazy API compliant arrays, such as ndonnx, can contain None in their shape
     if None in x.shape:
         return None
-    out = math.prod(x.shape)
-    # dask.array.Array.shape can contain NaN
-    return None if math.isnan(out) else out
-
-
-def is_writeable_array(x: object) -> bool:
-    """
-    Return False if ``x.__setitem__`` is expected to raise; True otherwise.
-    Return False if `x` is not an array API compatible object.
-
-    Warning
-    -------
-    As there is no standard way to check if an array is writeable without actually
-    writing to it, this function blindly returns True for all unknown array types.
-    """
-    if is_numpy_array(x):
-        return x.flags.writeable
-    if is_jax_array(x) or is_pydata_sparse_array(x):
-        return False
-    return is_array_api_obj(x)
-
-
-def is_lazy_array(x: object) -> bool:
-    """Return True if x is potentially a future or it may be otherwise impossible or
-    expensive to eagerly read its contents, regardless of their size, e.g. by
-    calling ``bool(x)`` or ``float(x)``.
-
-    Return False otherwise; e.g. ``bool(x)`` etc. is guaranteed to succeed and to be
-    cheap as long as the array has the right dtype and size.
-
-    Note
-    ----
-    This function errs on the side of caution for array types that may or may not be
-    lazy, e.g. JAX arrays, by always returning True for them.
-    """
-    if (
-        is_numpy_array(x)
-        or is_cupy_array(x)
-        or is_torch_array(x)
-        or is_pydata_sparse_array(x)
-    ):
-        return False
-
-    # **JAX note:** while it is possible to determine if you're inside or outside
-    # jax.jit by testing the subclass of a jax.Array object, as well as testing bool()
-    # as we do below for unknown arrays, this is not recommended by JAX best practices.
-
-    # **Dask note:** Dask eagerly computes the graph on __bool__, __float__, and so on.
-    # This behaviour, while impossible to change without breaking backwards
-    # compatibility, is highly detrimental to performance as the whole graph will end
-    # up being computed multiple times.
-
-    if is_jax_array(x) or is_dask_array(x) or is_ndonnx_array(x):
-        return True
-
-    if not is_array_api_obj(x):
-        return False
-
-    # Unknown Array API compatible object. Note that this test may have dire consequences
-    # in terms of performance, e.g. for a lazy object that eagerly computes the graph
-    # on __bool__ (dask is one such example, which however is special-cased above).
-
-    # Select a single point of the array
-    s = size(x)
-    if s is None:
-        return True
-    xp = array_namespace(x)
-    if s > 1:
-        x = xp.reshape(x, (-1,))[0]
-    # Cast to dtype=bool and deal with size 0 arrays
-    x = xp.any(x)
-
-    try:
-        bool(x)
-        return False
-    # The Array API standard dictates that __bool__ should raise TypeError if the
-    # output cannot be defined.
-    # Here we allow for it to raise arbitrary exceptions, e.g. like Dask does.
-    except Exception:
-        return True
-
+    return math.prod(x.shape)
 
 __all__ = [
     "array_namespace",
@@ -926,8 +818,6 @@ __all__ = [
     "is_ndonnx_namespace",
     "is_pydata_sparse_array",
     "is_pydata_sparse_namespace",
-    "is_writeable_array",
-    "is_lazy_array",
     "size",
     "to_device",
 ]

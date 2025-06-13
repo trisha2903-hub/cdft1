@@ -5,7 +5,6 @@ __all__ = [
     "SupportsBufferProtocol",
 ]
 
-from types import ModuleType
 from typing import (
     Any,
     TypeVar,
@@ -22,5 +21,3 @@ SupportsBufferProtocol = Any
 
 Array = Any
 Device = Any
-DType = Any
-Namespace = ModuleType

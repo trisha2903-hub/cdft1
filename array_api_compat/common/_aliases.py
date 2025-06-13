@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 from typing import NamedTuple
 import inspect
 
-from ._helpers import array_namespace, _check_device, device, is_cupy_namespace
+from ._helpers import array_namespace, _check_device, device, is_torch_array, is_cupy_namespace
 
 # These functions are modified from the NumPy versions.
 
@@ -233,6 +233,11 @@ def unique_values(x: ndarray, /, xp) -> ndarray:
         **kwargs,
     )
 
+def astype(x: ndarray, dtype: Dtype, /, *, copy: bool = True) -> ndarray:
+    if not copy and dtype == x.dtype:
+        return x
+    return x.astype(dtype=dtype, copy=copy)
+
 # These functions have different keyword argument names
 
 def std(
@@ -292,36 +297,6 @@ def cumulative_sum(
         )
     return res
 
-
-def cumulative_prod(
-    x: ndarray,
-    /,
-    xp,
-    *,
-    axis: Optional[int] = None,
-    dtype: Optional[Dtype] = None,
-    include_initial: bool = False,
-    **kwargs
-) -> ndarray:
-    wrapped_xp = array_namespace(x)
-
-    if axis is None:
-        if x.ndim > 1:
-            raise ValueError("axis must be specified in cumulative_prod for more than one dimension")
-        axis = 0
-
-    res = xp.cumprod(x, axis=axis, dtype=dtype, **kwargs)
-
-    # np.cumprod does not support include_initial
-    if include_initial:
-        initial_shape = list(x.shape)
-        initial_shape[axis] = 1
-        res = xp.concatenate(
-            [wrapped_xp.ones(shape=initial_shape, dtype=res.dtype, device=device(res)), res],
-            axis=axis,
-        )
-    return res
-
 # The min and max argument names in clip are different and not optional in numpy, and type
 # promotion behavior is different.
 def clip(
@@ -363,29 +338,28 @@ def clip(
 
     # At least handle the case of Python integers correctly (see
     # https://github.com/numpy/numpy/pull/26892).
-    if wrapped_xp.isdtype(x.dtype, "integral"):
-        if type(min) is int and min <= wrapped_xp.iinfo(x.dtype).min:
-            min = None
-        if type(max) is int and max >= wrapped_xp.iinfo(x.dtype).max:
-            max = None
+    if type(min) is int and min <= wrapped_xp.iinfo(x.dtype).min:
+        min = None
+    if type(max) is int and max >= wrapped_xp.iinfo(x.dtype).max:
+        max = None
 
-    dev = device(x)
     if out is None:
-        out = wrapped_xp.empty(result_shape, dtype=x.dtype, device=dev)
-    out[()] = x
-
+        out = wrapped_xp.asarray(xp.broadcast_to(x, result_shape),
+                                 copy=True, device=device(x))
     if min is not None:
-        a = wrapped_xp.asarray(min, dtype=x.dtype, device=dev)
-        a = xp.broadcast_to(a, result_shape)
+        if is_torch_array(x) and x.dtype == xp.float64 and _isscalar(min):
+            # Avoid loss of precision due to torch defaulting to float32
+            min = wrapped_xp.asarray(min, dtype=xp.float64)
+        a = xp.broadcast_to(wrapped_xp.asarray(min, device=device(x)), result_shape)
         ia = (out < a) | xp.isnan(a)
-        out[ia] = a[ia]
-
+        # torch requires an explicit cast here
+        out[ia] = wrapped_xp.astype(a[ia], out.dtype)
     if max is not None:
-        b = wrapped_xp.asarray(max, dtype=x.dtype, device=dev)
-        b = xp.broadcast_to(b, result_shape)
+        if is_torch_array(x) and x.dtype == xp.float64 and _isscalar(max):
+            max = wrapped_xp.asarray(max, dtype=xp.float64)
+        b = xp.broadcast_to(wrapped_xp.asarray(max, device=device(x)), result_shape)
         ib = (out > b) | xp.isnan(b)
-        out[ib] = b[ib]
-
+        out[ib] = wrapped_xp.astype(b[ib], out.dtype)
     # Return a scalar for 0-D
     return out[()]
 
@@ -505,7 +479,7 @@ def vecdot(x1: ndarray, x2: ndarray, /, xp, *, axis: int = -1) -> ndarray:
     x2_ = xp.moveaxis(x2, axis, -1)
     x1_, x2_ = _broadcast(x1_, x2_)
 
-    res = xp.conj(x1_[..., None, :]) @ x2_[..., None]
+    res = x1_[..., None, :] @ x2_[..., None]
     return res[..., 0, 0]
 
 # isdtype is a new function in the 2022.12 array API specification.
@@ -575,7 +549,7 @@ __all__ = ['arange', 'empty', 'empty_like', 'eye', 'full', 'full_like',
            'linspace', 'ones', 'ones_like', 'zeros', 'zeros_like',
            'UniqueAllResult', 'UniqueCountsResult', 'UniqueInverseResult',
            'unique_all', 'unique_counts', 'unique_inverse', 'unique_values',
-           'std', 'var', 'cumulative_sum', 'cumulative_prod','clip', 'permute_dims',
+           'astype', 'std', 'var', 'cumulative_sum', 'clip', 'permute_dims',
            'reshape', 'argsort', 'sort', 'nonzero', 'ceil', 'floor', 'trunc',
            'matmul', 'matrix_transpose', 'tensordot', 'vecdot', 'isdtype',
            'unstack', 'sign']
