@@ -1,55 +1,31 @@
-"""Evaluation metrics for cluster analysis results.
-
-- Supervised evaluation uses a ground truth class values for each sample.
-- Unsupervised evaluation does not use ground truths and measures the "quality" of the
-  model itself.
 """
+=========================================
+Clustering package (:mod:`scipy.cluster`)
+=========================================
 
-# Authors: The scikit-learn developers
-# SPDX-License-Identifier: BSD-3-Clause
+.. currentmodule:: scipy.cluster
 
-from ._bicluster import consensus_score
-from ._supervised import (
-    adjusted_mutual_info_score,
-    adjusted_rand_score,
-    completeness_score,
-    contingency_matrix,
-    entropy,
-    expected_mutual_information,
-    fowlkes_mallows_score,
-    homogeneity_completeness_v_measure,
-    homogeneity_score,
-    mutual_info_score,
-    normalized_mutual_info_score,
-    pair_confusion_matrix,
-    rand_score,
-    v_measure_score,
-)
-from ._unsupervised import (
-    calinski_harabasz_score,
-    davies_bouldin_score,
-    silhouette_samples,
-    silhouette_score,
-)
+Clustering algorithms are useful in information theory, target detection,
+communications, compression, and other areas. The `vq` module only
+supports vector quantization and the k-means algorithms.
 
-__all__ = [
-    "adjusted_mutual_info_score",
-    "adjusted_rand_score",
-    "calinski_harabasz_score",
-    "completeness_score",
-    "consensus_score",
-    "contingency_matrix",
-    "davies_bouldin_score",
-    "entropy",
-    "expected_mutual_information",
-    "fowlkes_mallows_score",
-    "homogeneity_completeness_v_measure",
-    "homogeneity_score",
-    "mutual_info_score",
-    "normalized_mutual_info_score",
-    "pair_confusion_matrix",
-    "rand_score",
-    "silhouette_samples",
-    "silhouette_score",
-    "v_measure_score",
-]
+The `hierarchy` module provides functions for hierarchical and
+agglomerative clustering.  Its features include generating hierarchical
+clusters from distance matrices,
+calculating statistics on clusters, cutting linkages
+to generate flat clusters, and visualizing clusters with dendrograms.
+
+.. toctree::
+   :maxdepth: 1
+
+   cluster.vq
+   cluster.hierarchy
+
+"""
+__all__ = ['vq', 'hierarchy']
+
+from . import vq, hierarchy
+
+from scipy._lib._testutils import PytestTester
+test = PytestTester(__name__)
+del PytestTester
