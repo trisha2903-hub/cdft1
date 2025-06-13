@@ -1,7 +1,9 @@
 py.extension_module(
-  '_svmlight_format_fast',
-  cython_gen.process('_svmlight_format_fast.pyx'),
+  '_gradient_boosting',
+  [cython_gen.process('_gradient_boosting.pyx')] + utils_cython_tree,
   dependencies: [np_dep],
-  subdir: 'sklearn/datasets',
+  subdir: 'sklearn/ensemble',
   install: true
 )
+
+subdir('_hist_gradient_boosting')
