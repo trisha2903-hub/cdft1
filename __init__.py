@@ -1,459 +1,130 @@
 """
-=====================================================
-Optimization and root finding (:mod:`scipy.optimize`)
-=====================================================
+=================================================
+Orthogonal distance regression (:mod:`scipy.odr`)
+=================================================
 
-.. currentmodule:: scipy.optimize
+.. currentmodule:: scipy.odr
 
-.. toctree::
-   :hidden:
-
-   optimize.cython_optimize
-
-SciPy ``optimize`` provides functions for minimizing (or maximizing)
-objective functions, possibly subject to constraints. It includes
-solvers for nonlinear problems (with support for both local and global
-optimization algorithms), linear programming, constrained
-and nonlinear least-squares, root finding, and curve fitting.
-
-Common functions and objects, shared across different solvers, are:
+Package Content
+===============
 
 .. autosummary::
    :toctree: generated/
 
-   show_options - Show specific options optimization solvers.
-   OptimizeResult - The optimization result returned by some optimizers.
-   OptimizeWarning - The optimization encountered problems.
-
-
-Optimization
-============
-
-Scalar functions optimization
------------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   minimize_scalar - Interface for minimizers of univariate functions
-
-The `minimize_scalar` function supports the following methods:
-
-.. toctree::
-
-   optimize.minimize_scalar-brent
-   optimize.minimize_scalar-bounded
-   optimize.minimize_scalar-golden
-
-Local (multivariate) optimization
----------------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   minimize - Interface for minimizers of multivariate functions.
-
-The `minimize` function supports the following methods:
-
-.. toctree::
-
-   optimize.minimize-neldermead
-   optimize.minimize-powell
-   optimize.minimize-cg
-   optimize.minimize-bfgs
-   optimize.minimize-newtoncg
-   optimize.minimize-lbfgsb
-   optimize.minimize-tnc
-   optimize.minimize-cobyla
-   optimize.minimize-cobyqa
-   optimize.minimize-slsqp
-   optimize.minimize-trustconstr
-   optimize.minimize-dogleg
-   optimize.minimize-trustncg
-   optimize.minimize-trustkrylov
-   optimize.minimize-trustexact
-
-Constraints are passed to `minimize` function as a single object or
-as a list of objects from the following classes:
-
-.. autosummary::
-   :toctree: generated/
-
-   NonlinearConstraint - Class defining general nonlinear constraints.
-   LinearConstraint - Class defining general linear constraints.
-
-Simple bound constraints are handled separately and there is a special class
-for them:
-
-.. autosummary::
-   :toctree: generated/
-
-   Bounds - Bound constraints.
-
-Quasi-Newton strategies implementing `HessianUpdateStrategy`
-interface can be used to approximate the Hessian in `minimize`
-function (available only for the 'trust-constr' method). Available
-quasi-Newton methods implementing this interface are:
-
-.. autosummary::
-   :toctree: generated/
-
-   BFGS - Broyden-Fletcher-Goldfarb-Shanno (BFGS) Hessian update strategy.
-   SR1 - Symmetric-rank-1 Hessian update strategy.
-
-.. _global_optimization:
-
-Global optimization
--------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   basinhopping - Basinhopping stochastic optimizer.
-   brute - Brute force searching optimizer.
-   differential_evolution - Stochastic optimizer using differential evolution.
-
-   shgo - Simplicial homology global optimizer.
-   dual_annealing - Dual annealing stochastic optimizer.
-   direct - DIRECT (Dividing Rectangles) optimizer.
-
-Least-squares and curve fitting
-===============================
-
-Nonlinear least-squares
------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   least_squares - Solve a nonlinear least-squares problem with bounds on the variables.
-
-Linear least-squares
---------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   nnls - Linear least-squares problem with non-negativity constraint.
-   lsq_linear - Linear least-squares problem with bound constraints.
-   isotonic_regression - Least squares problem of isotonic regression via PAVA.
-
-Curve fitting
--------------
-
-.. autosummary::
-   :toctree: generated/
-
-   curve_fit -- Fit curve to a set of points.
-
-Root finding
-============
-
-Scalar functions
-----------------
-.. autosummary::
-   :toctree: generated/
-
-   root_scalar - Unified interface for nonlinear solvers of scalar functions.
-   brentq - quadratic interpolation Brent method.
-   brenth - Brent method, modified by Harris with hyperbolic extrapolation.
-   ridder - Ridder's method.
-   bisect - Bisection method.
-   newton - Newton's method (also Secant and Halley's methods).
-   toms748 - Alefeld, Potra & Shi Algorithm 748.
-   RootResults - The root finding result returned by some root finders.
-
-The `root_scalar` function supports the following methods:
-
-.. toctree::
-
-   optimize.root_scalar-brentq
-   optimize.root_scalar-brenth
-   optimize.root_scalar-bisect
-   optimize.root_scalar-ridder
-   optimize.root_scalar-newton
-   optimize.root_scalar-toms748
-   optimize.root_scalar-secant
-   optimize.root_scalar-halley
-
-
-
-The table below lists situations and appropriate methods, along with
-*asymptotic* convergence rates per iteration (and per function evaluation)
-for successful convergence to a simple root(*).
-Bisection is the slowest of them all, adding one bit of accuracy for each
-function evaluation, but is guaranteed to converge.
-The other bracketing methods all (eventually) increase the number of accurate
-bits by about 50% for every function evaluation.
-The derivative-based methods, all built on `newton`, can converge quite quickly
-if the initial value is close to the root.  They can also be applied to
-functions defined on (a subset of) the complex plane.
-
-+-------------+----------+----------+-----------+-------------+-------------+----------------+
-| Domain of f | Bracket? |    Derivatives?      | Solvers     |        Convergence           |
-+             +          +----------+-----------+             +-------------+----------------+
-|             |          | `fprime` | `fprime2` |             | Guaranteed? |  Rate(s)(*)    |
-+=============+==========+==========+===========+=============+=============+================+
-| `R`         | Yes      | N/A      | N/A       | - bisection | - Yes       | - 1 "Linear"   |
-|             |          |          |           | - brentq    | - Yes       | - >=1, <= 1.62 |
-|             |          |          |           | - brenth    | - Yes       | - >=1, <= 1.62 |
-|             |          |          |           | - ridder    | - Yes       | - 2.0 (1.41)   |
-|             |          |          |           | - toms748   | - Yes       | - 2.7 (1.65)   |
-+-------------+----------+----------+-----------+-------------+-------------+----------------+
-| `R` or `C`  | No       | No       | No        | secant      | No          | 1.62 (1.62)    |
-+-------------+----------+----------+-----------+-------------+-------------+----------------+
-| `R` or `C`  | No       | Yes      | No        | newton      | No          | 2.00 (1.41)    |
-+-------------+----------+----------+-----------+-------------+-------------+----------------+
-| `R` or `C`  | No       | Yes      | Yes       | halley      | No          | 3.00 (1.44)    |
-+-------------+----------+----------+-----------+-------------+-------------+----------------+
-
-.. seealso::
-
-   `scipy.optimize.cython_optimize` -- Typed Cython versions of root finding functions
-
-Fixed point finding:
-
-.. autosummary::
-   :toctree: generated/
-
-   fixed_point - Single-variable fixed-point solver.
-
-Multidimensional
-----------------
-
-.. autosummary::
-   :toctree: generated/
-
-   root - Unified interface for nonlinear solvers of multivariate functions.
-
-The `root` function supports the following methods:
-
-.. toctree::
-
-   optimize.root-hybr
-   optimize.root-lm
-   optimize.root-broyden1
-   optimize.root-broyden2
-   optimize.root-anderson
-   optimize.root-linearmixing
-   optimize.root-diagbroyden
-   optimize.root-excitingmixing
-   optimize.root-krylov
-   optimize.root-dfsane
-   
-Elementwise Minimization and Root Finding
-=========================================
-
-.. toctree::
-   :maxdepth: 3
-
-   optimize.elementwise
-
-Linear programming / MILP
-=========================
-
-.. autosummary::
-   :toctree: generated/
-
-   milp -- Mixed integer linear programming.
-   linprog -- Unified interface for minimizers of linear programming problems.
-
-The `linprog` function supports the following methods:
-
-.. toctree::
-
-   optimize.linprog-simplex
-   optimize.linprog-interior-point
-   optimize.linprog-revised_simplex
-   optimize.linprog-highs-ipm
-   optimize.linprog-highs-ds
-   optimize.linprog-highs
-
-The simplex, interior-point, and revised simplex methods support callback
-functions, such as:
-
-.. autosummary::
-   :toctree: generated/
-
-   linprog_verbose_callback -- Sample callback function for linprog (simplex).
-
-Assignment problems
-===================
-
-.. autosummary::
-   :toctree: generated/
-
-   linear_sum_assignment -- Solves the linear-sum assignment problem.
-   quadratic_assignment -- Solves the quadratic assignment problem.
-
-The `quadratic_assignment` function supports the following methods:
-
-.. toctree::
-
-   optimize.qap-faq
-   optimize.qap-2opt
-
-Utilities
-=========
-
-Finite-difference approximation
--------------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   approx_fprime - Approximate the gradient of a scalar function.
-   check_grad - Check the supplied derivative using finite differences.
-
-
-Line search
+   Data          -- The data to fit.
+   RealData      -- Data with weights as actual std. dev.s and/or covariances.
+   Model         -- Stores information about the function to be fit.
+   ODR           -- Gathers all info & manages the main fitting routine.
+   Output        -- Result from the fit.
+   odr           -- Low-level function for ODR.
+
+   OdrWarning    -- Warning about potential problems when running ODR.
+   OdrError      -- Error exception.
+   OdrStop       -- Stop exception.
+
+   polynomial    -- Factory function for a general polynomial model.
+   exponential   -- Exponential model
+   multilinear   -- Arbitrary-dimensional linear model
+   unilinear     -- Univariate linear model
+   quadratic     -- Quadratic model
+
+Usage information
+=================
+
+Introduction
+------------
+
+Why Orthogonal Distance Regression (ODR)? Sometimes one has
+measurement errors in the explanatory (a.k.a., "independent")
+variable(s), not just the response (a.k.a., "dependent") variable(s).
+Ordinary Least Squares (OLS) fitting procedures treat the data for
+explanatory variables as fixed, i.e., not subject to error of any kind.
+Furthermore, OLS procedures require that the response variables be an
+explicit function of the explanatory variables; sometimes making the
+equation explicit is impractical and/or introduces errors.  ODR can
+handle both of these cases with ease, and can even reduce to the OLS
+case if that is sufficient for the problem.
+
+ODRPACK is a FORTRAN-77 library for performing ODR with possibly
+non-linear fitting functions. It uses a modified trust-region
+Levenberg-Marquardt-type algorithm [1]_ to estimate the function
+parameters.  The fitting functions are provided by Python functions
+operating on NumPy arrays. The required derivatives may be provided
+by Python functions as well, or may be estimated numerically. ODRPACK
+can do explicit or implicit ODR fits, or it can do OLS. Input and
+output variables may be multidimensional. Weights can be provided to
+account for different variances of the observations, and even
+covariances between dimensions of the variables.
+
+The `scipy.odr` package offers an object-oriented interface to
+ODRPACK, in addition to the low-level `odr` function.
+
+Additional background information about ODRPACK can be found in the
+`ODRPACK User's Guide
+<https://docs.scipy.org/doc/external/odrpack_guide.pdf>`_, reading
+which is recommended.
+
+Basic usage
 -----------
 
-.. autosummary::
-   :toctree: generated/
+1. Define the function you want to fit against.::
 
-   bracket - Bracket a minimum, given two starting points.
-   line_search - Return a step that satisfies the strong Wolfe conditions.
+       def f(B, x):
+           '''Linear function y = m*x + b'''
+           # B is a vector of the parameters.
+           # x is an array of the current x values.
+           # x is in the same format as the x passed to Data or RealData.
+           #
+           # Return an array in the same format as y passed to Data or RealData.
+           return B[0]*x + B[1]
 
-Hessian approximation
----------------------
+2. Create a Model.::
 
-.. autosummary::
-   :toctree: generated/
+       linear = Model(f)
 
-   LbfgsInvHessProduct - Linear operator for L-BFGS approximate inverse Hessian.
-   HessianUpdateStrategy - Interface for implementing Hessian update strategies
+3. Create a Data or RealData instance.::
 
-Benchmark problems
-------------------
+       mydata = Data(x, y, wd=1./power(sx,2), we=1./power(sy,2))
 
-.. autosummary::
-   :toctree: generated/
+   or, when the actual covariances are known::
 
-   rosen - The Rosenbrock function.
-   rosen_der - The derivative of the Rosenbrock function.
-   rosen_hess - The Hessian matrix of the Rosenbrock function.
-   rosen_hess_prod - Product of the Rosenbrock Hessian with a vector.
+       mydata = RealData(x, y, sx=sx, sy=sy)
 
-Legacy functions
-================
+4. Instantiate ODR with your data, model and initial parameter estimate.::
 
-The functions below are not recommended for use in new scripts;
-all of these methods are accessible via a newer, more consistent
-interfaces, provided by the interfaces above.
+       myodr = ODR(mydata, linear, beta0=[1., 2.])
 
-Optimization
-------------
+5. Run the fit.::
 
-General-purpose multivariate methods:
+       myoutput = myodr.run()
 
-.. autosummary::
-   :toctree: generated/
+6. Examine output.::
 
-   fmin - Nelder-Mead Simplex algorithm.
-   fmin_powell - Powell's (modified) conjugate direction method.
-   fmin_cg - Non-linear (Polak-Ribiere) conjugate gradient algorithm.
-   fmin_bfgs - Quasi-Newton method (Broydon-Fletcher-Goldfarb-Shanno).
-   fmin_ncg - Line-search Newton Conjugate Gradient.
+       myoutput.pprint()
 
-Constrained multivariate methods:
 
-.. autosummary::
-   :toctree: generated/
+References
+----------
+.. [1] P. T. Boggs and J. E. Rogers, "Orthogonal Distance Regression,"
+   in "Statistical analysis of measurement error models and
+   applications: proceedings of the AMS-IMS-SIAM joint summer research
+   conference held June 10-16, 1989," Contemporary Mathematics,
+   vol. 112, pg. 186, 1990.
 
-   fmin_l_bfgs_b - Zhu, Byrd, and Nocedal's constrained optimizer.
-   fmin_tnc - Truncated Newton code.
-   fmin_cobyla - Constrained optimization by linear approximation.
-   fmin_slsqp - Minimization using sequential least-squares programming.
+"""
+# version: 0.7
+# author: Robert Kern <robert.kern@gmail.com>
+# date: 2006-09-21
 
-Univariate (scalar) minimization methods:
-
-.. autosummary::
-   :toctree: generated/
-
-   fminbound - Bounded minimization of a scalar function.
-   brent - 1-D function minimization using Brent method.
-   golden - 1-D function minimization using Golden Section method.
-
-Least-squares
--------------
-
-.. autosummary::
-   :toctree: generated/
-
-   leastsq - Minimize the sum of squares of M equations in N unknowns.
-
-Root finding
-------------
-
-General nonlinear solvers:
-
-.. autosummary::
-   :toctree: generated/
-
-   fsolve - Non-linear multivariable equation solver.
-   broyden1 - Broyden's first method.
-   broyden2 - Broyden's second method.
-   NoConvergence -  Exception raised when nonlinear solver does not converge.
-
-Large-scale nonlinear solvers:
-
-.. autosummary::
-   :toctree: generated/
-
-   newton_krylov
-   anderson
-
-   BroydenFirst
-   InverseJacobian
-   KrylovJacobian
-
-Simple iteration solvers:
-
-.. autosummary::
-   :toctree: generated/
-
-   excitingmixing
-   linearmixing
-   diagbroyden
-
-"""  # noqa: E501
-
-from ._optimize import *
-from ._minimize import *
-from ._root import *
-from ._root_scalar import *
-from ._minpack_py import *
-from ._zeros_py import *
-from ._lbfgsb_py import fmin_l_bfgs_b, LbfgsInvHessProduct
-from ._tnc import fmin_tnc
-from ._cobyla_py import fmin_cobyla
-from ._nonlin import *
-from ._slsqp_py import fmin_slsqp
-from ._nnls import nnls
-from ._basinhopping import basinhopping
-from ._linprog import linprog, linprog_verbose_callback
-from ._lsap import linear_sum_assignment
-from ._differentialevolution import differential_evolution
-from ._lsq import least_squares, lsq_linear
-from ._isotonic import isotonic_regression
-from ._constraints import (NonlinearConstraint,
-                           LinearConstraint,
-                           Bounds)
-from ._hessian_update_strategy import HessianUpdateStrategy, BFGS, SR1
-from ._shgo import shgo
-from ._dual_annealing import dual_annealing
-from ._qap import quadratic_assignment
-from ._direct_py import direct
-from ._milp import milp
+from ._odrpack import *
+from ._models import *
+from . import _add_newdocs
 
 # Deprecated namespaces, to be removed in v2.0.0
-from . import (
-    cobyla, lbfgsb, linesearch, minpack, minpack2, moduleTNC, nonlin, optimize,
-    slsqp, tnc, zeros
-)
+from . import models, odrpack
 
-__all__ = [s for s in dir() if not s.startswith('_')]
+__all__ = [s for s in dir()
+           if not (s.startswith('_') or s in ('odr_stop', 'odr_error'))]
 
 from scipy._lib._testutils import PytestTester
 test = PytestTester(__name__)
