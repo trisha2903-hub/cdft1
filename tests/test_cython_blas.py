@@ -1,250 +1,118 @@
 import numpy as np
-import pytest
+from numpy.testing import (assert_allclose,
+                           assert_equal)
+import scipy.linalg.cython_blas as blas
 
-from sklearn.utils._cython_blas import (
-    BLAS_Order,
-    BLAS_Trans,
-    _asum_memview,
-    _axpy_memview,
-    _copy_memview,
-    _dot_memview,
-    _gemm_memview,
-    _gemv_memview,
-    _ger_memview,
-    _nrm2_memview,
-    _rot_memview,
-    _rotg_memview,
-    _scal_memview,
-)
-from sklearn.utils._testing import assert_allclose
+class TestDGEMM:
+    
+    def test_transposes(self):
 
+        a = np.arange(12, dtype='d').reshape((3, 4))[:2,:2]
+        b = np.arange(1, 13, dtype='d').reshape((4, 3))[:2,:2]
+        c = np.empty((2, 4))[:2,:2]
 
-def _numpy_to_cython(dtype):
-    cython = pytest.importorskip("cython")
-    if dtype == np.float32:
-        return cython.float
-    elif dtype == np.float64:
-        return cython.double
+        blas._test_dgemm(1., a, b, 0., c)
+        assert_allclose(c, a.dot(b))
 
+        blas._test_dgemm(1., a.T, b, 0., c)
+        assert_allclose(c, a.T.dot(b))
 
-RTOL = {np.float32: 1e-6, np.float64: 1e-12}
-ORDER = {BLAS_Order.RowMajor: "C", BLAS_Order.ColMajor: "F"}
+        blas._test_dgemm(1., a, b.T, 0., c)
+        assert_allclose(c, a.dot(b.T))
 
+        blas._test_dgemm(1., a.T, b.T, 0., c)
+        assert_allclose(c, a.T.dot(b.T))
 
-def _no_op(x):
-    return x
+        blas._test_dgemm(1., a, b, 0., c.T)
+        assert_allclose(c, a.dot(b).T)
 
+        blas._test_dgemm(1., a.T, b, 0., c.T)
+        assert_allclose(c, a.T.dot(b).T)
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_dot(dtype):
-    dot = _dot_memview[_numpy_to_cython(dtype)]
+        blas._test_dgemm(1., a, b.T, 0., c.T)
+        assert_allclose(c, a.dot(b.T).T)
 
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
-    y = rng.random_sample(10).astype(dtype, copy=False)
+        blas._test_dgemm(1., a.T, b.T, 0., c.T)
+        assert_allclose(c, a.T.dot(b.T).T)
+    
+    def test_shapes(self):
+        a = np.arange(6, dtype='d').reshape((3, 2))
+        b = np.arange(-6, 2, dtype='d').reshape((2, 4))
+        c = np.empty((3, 4))
 
-    expected = x.dot(y)
-    actual = dot(x, y)
+        blas._test_dgemm(1., a, b, 0., c)
+        assert_allclose(c, a.dot(b))
 
-    assert_allclose(actual, expected, rtol=RTOL[dtype])
+        blas._test_dgemm(1., b.T, a.T, 0., c.T)
+        assert_allclose(c, b.T.dot(a.T).T)
+        
+class TestWfuncPointers:
+    """ Test the function pointers that are expected to fail on
+    Mac OS X without the additional entry statement in their definitions
+    in fblas_l1.pyf.src. """
 
+    def test_complex_args(self):
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_asum(dtype):
-    asum = _asum_memview[_numpy_to_cython(dtype)]
+        cx = np.array([.5 + 1.j, .25 - .375j, 12.5 - 4.j], np.complex64)
+        cy = np.array([.8 + 2.j, .875 - .625j, -1. + 2.j], np.complex64)
 
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
+        assert_allclose(blas._test_cdotc(cx, cy),
+                        -17.6468753815+21.3718757629j)
+        assert_allclose(blas._test_cdotu(cx, cy),
+                        -6.11562538147+30.3156242371j)
 
-    expected = np.abs(x).sum()
-    actual = asum(x)
+        assert_equal(blas._test_icamax(cx), 3)
 
-    assert_allclose(actual, expected, rtol=RTOL[dtype])
+        assert_allclose(blas._test_scasum(cx), 18.625)
+        assert_allclose(blas._test_scnrm2(cx), 13.1796483994)
 
+        assert_allclose(blas._test_cdotc(cx[::2], cy[::2]),
+                        -18.1000003815+21.2000007629j)
+        assert_allclose(blas._test_cdotu(cx[::2], cy[::2]),
+                        -6.10000038147+30.7999992371j)
+        assert_allclose(blas._test_scasum(cx[::2]), 18.)
+        assert_allclose(blas._test_scnrm2(cx[::2]), 13.1719398499)
+    
+    def test_double_args(self):
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_axpy(dtype):
-    axpy = _axpy_memview[_numpy_to_cython(dtype)]
+        x = np.array([5., -3, -.5], np.float64)
+        y = np.array([2, 1, .5], np.float64)
 
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
-    y = rng.random_sample(10).astype(dtype, copy=False)
-    alpha = 2.5
+        assert_allclose(blas._test_dasum(x), 8.5)
+        assert_allclose(blas._test_ddot(x, y), 6.75)
+        assert_allclose(blas._test_dnrm2(x), 5.85234975815)
 
-    expected = alpha * x + y
-    axpy(alpha, x, y)
+        assert_allclose(blas._test_dasum(x[::2]), 5.5)
+        assert_allclose(blas._test_ddot(x[::2], y[::2]), 9.75)
+        assert_allclose(blas._test_dnrm2(x[::2]), 5.0249376297)
 
-    assert_allclose(y, expected, rtol=RTOL[dtype])
+        assert_equal(blas._test_idamax(x), 1)
 
+    def test_float_args(self):
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_nrm2(dtype):
-    nrm2 = _nrm2_memview[_numpy_to_cython(dtype)]
+        x = np.array([5., -3, -.5], np.float32)
+        y = np.array([2, 1, .5], np.float32)
 
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
+        assert_equal(blas._test_isamax(x), 1)
 
-    expected = np.linalg.norm(x)
-    actual = nrm2(x)
+        assert_allclose(blas._test_sasum(x), 8.5)
+        assert_allclose(blas._test_sdot(x, y), 6.75)
+        assert_allclose(blas._test_snrm2(x), 5.85234975815)
 
-    assert_allclose(actual, expected, rtol=RTOL[dtype])
+        assert_allclose(blas._test_sasum(x[::2]), 5.5)
+        assert_allclose(blas._test_sdot(x[::2], y[::2]), 9.75)
+        assert_allclose(blas._test_snrm2(x[::2]), 5.0249376297)
 
+    def test_double_complex_args(self):
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_copy(dtype):
-    copy = _copy_memview[_numpy_to_cython(dtype)]
+        cx = np.array([.5 + 1.j, .25 - .375j, 13. - 4.j], np.complex128)
+        cy = np.array([.875 + 2.j, .875 - .625j, -1. + 2.j], np.complex128)
 
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
-    y = np.empty_like(x)
+        assert_equal(blas._test_izamax(cx), 3)
 
-    expected = x.copy()
-    copy(x, y)
+        assert_allclose(blas._test_zdotc(cx, cy), -18.109375+22.296875j)
+        assert_allclose(blas._test_zdotu(cx, cy), -6.578125+31.390625j)
 
-    assert_allclose(y, expected, rtol=RTOL[dtype])
+        assert_allclose(blas._test_zdotc(cx[::2], cy[::2]), -18.5625+22.125j)
+        assert_allclose(blas._test_zdotu(cx[::2], cy[::2]), -6.5625+31.875j)
 
-
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_scal(dtype):
-    scal = _scal_memview[_numpy_to_cython(dtype)]
-
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
-    alpha = 2.5
-
-    expected = alpha * x
-    scal(alpha, x)
-
-    assert_allclose(x, expected, rtol=RTOL[dtype])
-
-
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_rotg(dtype):
-    rotg = _rotg_memview[_numpy_to_cython(dtype)]
-
-    rng = np.random.RandomState(0)
-    a = dtype(rng.randn())
-    b = dtype(rng.randn())
-    c, s = 0.0, 0.0
-
-    def expected_rotg(a, b):
-        roe = a if abs(a) > abs(b) else b
-        if a == 0 and b == 0:
-            c, s, r, z = (1, 0, 0, 0)
-        else:
-            r = np.sqrt(a**2 + b**2) * (1 if roe >= 0 else -1)
-            c, s = a / r, b / r
-            z = s if roe == a else (1 if c == 0 else 1 / c)
-        return r, z, c, s
-
-    expected = expected_rotg(a, b)
-    actual = rotg(a, b, c, s)
-
-    assert_allclose(actual, expected, rtol=RTOL[dtype])
-
-
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_rot(dtype):
-    rot = _rot_memview[_numpy_to_cython(dtype)]
-
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
-    y = rng.random_sample(10).astype(dtype, copy=False)
-    c = dtype(rng.randn())
-    s = dtype(rng.randn())
-
-    expected_x = c * x + s * y
-    expected_y = c * y - s * x
-
-    rot(x, y, c, s)
-
-    assert_allclose(x, expected_x)
-    assert_allclose(y, expected_y)
-
-
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize(
-    "opA, transA",
-    [(_no_op, BLAS_Trans.NoTrans), (np.transpose, BLAS_Trans.Trans)],
-    ids=["NoTrans", "Trans"],
-)
-@pytest.mark.parametrize(
-    "order",
-    [BLAS_Order.RowMajor, BLAS_Order.ColMajor],
-    ids=["RowMajor", "ColMajor"],
-)
-def test_gemv(dtype, opA, transA, order):
-    gemv = _gemv_memview[_numpy_to_cython(dtype)]
-
-    rng = np.random.RandomState(0)
-    A = np.asarray(
-        opA(rng.random_sample((20, 10)).astype(dtype, copy=False)), order=ORDER[order]
-    )
-    x = rng.random_sample(10).astype(dtype, copy=False)
-    y = rng.random_sample(20).astype(dtype, copy=False)
-    alpha, beta = 2.5, -0.5
-
-    expected = alpha * opA(A).dot(x) + beta * y
-    gemv(transA, alpha, A, x, beta, y)
-
-    assert_allclose(y, expected, rtol=RTOL[dtype])
-
-
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize(
-    "order",
-    [BLAS_Order.RowMajor, BLAS_Order.ColMajor],
-    ids=["BLAS_Order.RowMajor", "BLAS_Order.ColMajor"],
-)
-def test_ger(dtype, order):
-    ger = _ger_memview[_numpy_to_cython(dtype)]
-
-    rng = np.random.RandomState(0)
-    x = rng.random_sample(10).astype(dtype, copy=False)
-    y = rng.random_sample(20).astype(dtype, copy=False)
-    A = np.asarray(
-        rng.random_sample((10, 20)).astype(dtype, copy=False), order=ORDER[order]
-    )
-    alpha = 2.5
-
-    expected = alpha * np.outer(x, y) + A
-    ger(alpha, x, y, A)
-
-    assert_allclose(A, expected, rtol=RTOL[dtype])
-
-
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize(
-    "opB, transB",
-    [(_no_op, BLAS_Trans.NoTrans), (np.transpose, BLAS_Trans.Trans)],
-    ids=["NoTrans", "Trans"],
-)
-@pytest.mark.parametrize(
-    "opA, transA",
-    [(_no_op, BLAS_Trans.NoTrans), (np.transpose, BLAS_Trans.Trans)],
-    ids=["NoTrans", "Trans"],
-)
-@pytest.mark.parametrize(
-    "order",
-    [BLAS_Order.RowMajor, BLAS_Order.ColMajor],
-    ids=["BLAS_Order.RowMajor", "BLAS_Order.ColMajor"],
-)
-def test_gemm(dtype, opA, transA, opB, transB, order):
-    gemm = _gemm_memview[_numpy_to_cython(dtype)]
-
-    rng = np.random.RandomState(0)
-    A = np.asarray(
-        opA(rng.random_sample((30, 10)).astype(dtype, copy=False)), order=ORDER[order]
-    )
-    B = np.asarray(
-        opB(rng.random_sample((10, 20)).astype(dtype, copy=False)), order=ORDER[order]
-    )
-    C = np.asarray(
-        rng.random_sample((30, 20)).astype(dtype, copy=False), order=ORDER[order]
-    )
-    alpha, beta = 2.5, -0.5
-
-    expected = alpha * opA(A).dot(opB(B)) + beta * C
-    gemm(transA, transB, alpha, A, B, beta, C)
-
-    assert_allclose(C, expected, rtol=RTOL[dtype])

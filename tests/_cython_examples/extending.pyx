@@ -2,42 +2,22 @@
 #cython: language_level=3
 #cython: boundscheck=False
 #cython: wraparound=False
-"""
-Taken from docstring for scipy.optimize.cython_optimize module.
-"""
 
-from scipy.optimize.cython_optimize cimport brentq
+cimport scipy.linalg
+from scipy.linalg.cython_blas cimport cdotu
+from scipy.linalg.cython_lapack cimport dgtsv
 
-# import math from Cython
-from libc cimport math
+cpdef tridiag(double[:] a, double[:] b, double[:] c, double[:] x):
+    """ Solve the system A y = x for y where A is the tridiagonal matrix with
+    subdiagonal 'a', diagonal 'b', and superdiagonal 'c'. """
+    cdef int n=b.shape[0], nrhs=1, info
+    # Solution is written over the values in x.
+    dgtsv(&n, &nrhs, &a[0], &b[0], &c[0], &x[0], &n, &info)
 
-myargs = {'C0': 1.0, 'C1': 0.7}  # a dictionary of extra arguments
-XLO, XHI = 0.5, 1.0  # lower and upper search boundaries
-XTOL, RTOL, MITR = 1e-3, 1e-3, 10  # other solver parameters
-
-# user-defined struct for extra parameters
-ctypedef struct test_params:
-    double C0
-    double C1
-
-
-# user-defined callback
-cdef double f(double x, void *args) noexcept:
-    cdef test_params *myargs = <test_params *> args
-    return myargs.C0 - math.exp(-(x - myargs.C1))
-
-
-# Cython wrapper function
-cdef double brentq_wrapper_example(dict args, double xa, double xb,
-                                    double xtol, double rtol, int mitr):
-    # Cython automatically casts dictionary to struct
-    cdef test_params myargs = args
-    return brentq(
-        f, xa, xb, <test_params *> &myargs, xtol, rtol, mitr, NULL)
-
-
-# Python function
-def brentq_example(args=myargs, xa=XLO, xb=XHI, xtol=XTOL, rtol=RTOL,
-                    mitr=MITR):
-    '''Calls Cython wrapper from Python.'''
-    return brentq_wrapper_example(args, xa, xb, xtol, rtol, mitr)
+cpdef float complex complex_dot(float complex[:] cx, float complex[:] cy):
+    """ Take dot product of two complex vectors """
+    cdef:
+        int n = cx.shape[0]
+        int incx = cx.strides[0] // sizeof(cx[0])
+        int incy = cy.strides[0] // sizeof(cy[0])
+    return cdotu(&n, &cx[0], &incx, &cy[0], &incy)
