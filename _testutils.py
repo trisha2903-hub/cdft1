@@ -1,321 +1,369 @@
+"""
+Generic test utilities.
+
+"""
+
+import inspect
 import os
-import functools
-import operator
-from scipy._lib import _pep440
+import re
+import shutil
+import subprocess
+import sys
+import sysconfig
+import threading
+from importlib.util import module_from_spec, spec_from_file_location
 
 import numpy as np
-from numpy.testing import assert_
-import pytest
+import scipy
 
-import scipy.special as sc
-
-__all__ = ['with_special_errors', 'assert_func_equal', 'FuncData']
-
-
-#------------------------------------------------------------------------------
-# Check if a module is present to be used in tests
-#------------------------------------------------------------------------------
-
-class MissingModule:
-    def __init__(self, name):
-        self.name = name
-
-
-def check_version(module, min_ver):
-    if type(module) is MissingModule:
-        return pytest.mark.skip(reason=f"{module.name} is not installed")
-    return pytest.mark.skipif(
-        _pep440.parse(module.__version__) < _pep440.Version(min_ver),
-        reason=f"{module.__name__} version >= {min_ver} required"
+try:
+    # Need type: ignore[import-untyped] for mypy >= 1.6
+    import cython  # type: ignore[import-untyped]
+    from Cython.Compiler.Version import (  # type: ignore[import-untyped]
+        version as cython_version,
     )
+except ImportError:
+    cython = None
+else:
+    from scipy._lib import _pep440
+    required_version = '3.0.8'
+    if _pep440.parse(cython_version) < _pep440.Version(required_version):
+        # too old or wrong cython, skip Cython API tests
+        cython = None
 
 
-#------------------------------------------------------------------------------
-# Enable convergence and loss of precision warnings -- turn off one by one
-#------------------------------------------------------------------------------
+__all__ = ['PytestTester', 'check_free_memory', '_TestPythranFunc', 'IS_MUSL']
 
-def with_special_errors(func):
+
+IS_MUSL = False
+# alternate way is
+# from packaging.tags import sys_tags
+#     _tags = list(sys_tags())
+#     if 'musllinux' in _tags[0].platform:
+_v = sysconfig.get_config_var('HOST_GNU_TYPE') or ''
+if 'musl' in _v:
+    IS_MUSL = True
+
+
+IS_EDITABLE = 'editable' in scipy.__path__[0]
+
+
+class FPUModeChangeWarning(RuntimeWarning):
+    """Warning about FPU mode change"""
+    pass
+
+
+class PytestTester:
     """
-    Enable special function errors (such as underflow, overflow,
-    loss of precision, etc.)
-    """
-    @functools.wraps(func)
-    def wrapper(*a, **kw):
-        with sc.errstate(all='raise'):
-            res = func(*a, **kw)
-        return res
-    return wrapper
+    Run tests for this namespace
 
-
-#------------------------------------------------------------------------------
-# Comparing function values at many data points at once, with helpful
-# error reports
-#------------------------------------------------------------------------------
-
-def assert_func_equal(func, results, points, rtol=None, atol=None,
-                      param_filter=None, knownfailure=None,
-                      vectorized=True, dtype=None, nan_ok=False,
-                      ignore_inf_sign=False, distinguish_nan_and_inf=True):
-    if hasattr(points, 'next'):
-        # it's a generator
-        points = list(points)
-
-    points = np.asarray(points)
-    if points.ndim == 1:
-        points = points[:,None]
-    nparams = points.shape[1]
-
-    if hasattr(results, '__name__'):
-        # function
-        data = points
-        result_columns = None
-        result_func = results
-    else:
-        # dataset
-        data = np.c_[points, results]
-        result_columns = list(range(nparams, data.shape[1]))
-        result_func = None
-
-    fdata = FuncData(func, data, list(range(nparams)),
-                     result_columns=result_columns, result_func=result_func,
-                     rtol=rtol, atol=atol, param_filter=param_filter,
-                     knownfailure=knownfailure, nan_ok=nan_ok, vectorized=vectorized,
-                     ignore_inf_sign=ignore_inf_sign,
-                     distinguish_nan_and_inf=distinguish_nan_and_inf)
-    fdata.check()
-
-
-class FuncData:
-    """
-    Data set for checking a special function.
+    ``scipy.test()`` runs tests for all of SciPy, with the default settings.
+    When used from a submodule (e.g., ``scipy.cluster.test()``, only the tests
+    for that namespace are run.
 
     Parameters
     ----------
-    func : function
-        Function to test
-    data : numpy array
-        columnar data to use for testing
-    param_columns : int or tuple of ints
-        Columns indices in which the parameters to `func` lie.
-        Can be imaginary integers to indicate that the parameter
-        should be cast to complex.
-    result_columns : int or tuple of ints, optional
-        Column indices for expected results from `func`.
-    result_func : callable, optional
-        Function to call to obtain results.
-    rtol : float, optional
-        Required relative tolerance. Default is 5*eps.
-    atol : float, optional
-        Required absolute tolerance. Default is 5*tiny.
-    param_filter : function, or tuple of functions/Nones, optional
-        Filter functions to exclude some parameter ranges.
-        If omitted, no filtering is done.
-    knownfailure : str, optional
-        Known failure error message to raise when the test is run.
-        If omitted, no exception is raised.
-    nan_ok : bool, optional
-        If nan is always an accepted result.
-    vectorized : bool, optional
-        Whether all functions passed in are vectorized.
-    ignore_inf_sign : bool, optional
-        Whether to ignore signs of infinities.
-        (Doesn't matter for complex-valued functions.)
-    distinguish_nan_and_inf : bool, optional
-        If True, treat numbers which contain nans or infs as
-        equal. Sets ignore_inf_sign to be True.
+    label : {'fast', 'full'}, optional
+        Whether to run only the fast tests, or also those marked as slow.
+        Default is 'fast'.
+    verbose : int, optional
+        Test output verbosity. Default is 1.
+    extra_argv : list, optional
+        Arguments to pass through to Pytest.
+    doctests : bool, optional
+        Whether to run doctests or not. Default is False.
+    coverage : bool, optional
+        Whether to run tests with code coverage measurements enabled.
+        Default is False.
+    tests : list of str, optional
+        List of module names to run tests for. By default, uses the module
+        from which the ``test`` function is called.
+    parallel : int, optional
+        Run tests in parallel with pytest-xdist, if number given is larger than
+        1. Default is 1.
 
     """
+    def __init__(self, module_name):
+        self.module_name = module_name
 
-    def __init__(self, func, data, param_columns, result_columns=None,
-                 result_func=None, rtol=None, atol=None, param_filter=None,
-                 knownfailure=None, dataname=None, nan_ok=False, vectorized=True,
-                 ignore_inf_sign=False, distinguish_nan_and_inf=True):
-        self.func = func
-        self.data = data
-        self.dataname = dataname
-        if not hasattr(param_columns, '__len__'):
-            param_columns = (param_columns,)
-        self.param_columns = tuple(param_columns)
-        if result_columns is not None:
-            if not hasattr(result_columns, '__len__'):
-                result_columns = (result_columns,)
-            self.result_columns = tuple(result_columns)
-            if result_func is not None:
-                message = "Only result_func or result_columns should be provided"
-                raise ValueError(message)
-        elif result_func is not None:
-            self.result_columns = None
-        else:
-            raise ValueError("Either result_func or result_columns should be provided")
-        self.result_func = result_func
-        self.rtol = rtol
-        self.atol = atol
-        if not hasattr(param_filter, '__len__'):
-            param_filter = (param_filter,)
-        self.param_filter = param_filter
-        self.knownfailure = knownfailure
-        self.nan_ok = nan_ok
-        self.vectorized = vectorized
-        self.ignore_inf_sign = ignore_inf_sign
-        self.distinguish_nan_and_inf = distinguish_nan_and_inf
-        if not self.distinguish_nan_and_inf:
-            self.ignore_inf_sign = True
+    def __call__(self, label="fast", verbose=1, extra_argv=None, doctests=False,
+                 coverage=False, tests=None, parallel=None):
+        import pytest
 
-    def get_tolerances(self, dtype):
-        if not np.issubdtype(dtype, np.inexact):
-            dtype = np.dtype(float)
-        info = np.finfo(dtype)
-        rtol, atol = self.rtol, self.atol
-        if rtol is None:
-            rtol = 5*info.eps
-        if atol is None:
-            atol = 5*info.tiny
-        return rtol, atol
+        module = sys.modules[self.module_name]
+        module_path = os.path.abspath(module.__path__[0])
 
-    def check(self, data=None, dtype=None, dtypes=None):
-        """Check the special function against the data."""
-        __tracebackhide__ = operator.methodcaller(
-            'errisinstance', AssertionError
-        )
+        pytest_args = ['--showlocals', '--tb=short']
 
-        if self.knownfailure:
-            pytest.xfail(reason=self.knownfailure)
+        if extra_argv:
+            pytest_args += list(extra_argv)
 
-        if data is None:
-            data = self.data
+        if verbose and int(verbose) > 1:
+            pytest_args += ["-" + "v"*(int(verbose)-1)]
 
-        if dtype is None:
-            dtype = data.dtype
-        else:
-            data = data.astype(dtype)
+        if coverage:
+            pytest_args += ["--cov=" + module_path]
 
-        rtol, atol = self.get_tolerances(dtype)
+        if label == "fast":
+            pytest_args += ["-m", "not slow"]
+        elif label != "full":
+            pytest_args += ["-m", label]
 
-        # Apply given filter functions
-        if self.param_filter:
-            param_mask = np.ones((data.shape[0],), np.bool_)
-            for j, filter in zip(self.param_columns, self.param_filter):
-                if filter:
-                    param_mask &= list(filter(data[:,j]))
-            data = data[param_mask]
+        if tests is None:
+            tests = [self.module_name]
 
-        # Pick parameters from the correct columns
-        params = []
-        for idx, j in enumerate(self.param_columns):
-            if np.iscomplexobj(j):
-                j = int(j.imag)
-                params.append(data[:,j].astype(complex))
-            elif dtypes and idx < len(dtypes):
-                params.append(data[:, j].astype(dtypes[idx]))
+        if parallel is not None and parallel > 1:
+            if _pytest_has_xdist():
+                pytest_args += ['-n', str(parallel)]
             else:
-                params.append(data[:,j])
+                import warnings
+                warnings.warn('Could not run tests in parallel because '
+                              'pytest-xdist plugin is not available.',
+                              stacklevel=2)
 
-        # Helper for evaluating results
-        def eval_func_at_params(func, skip_mask=None):
-            if self.vectorized:
-                got = func(*params)
-            else:
-                got = []
-                for j in range(len(params[0])):
-                    if skip_mask is not None and skip_mask[j]:
-                        got.append(np.nan)
-                        continue
-                    got.append(func(*tuple([params[i][j] for i in range(len(params))])))
-                got = np.asarray(got)
-            if not isinstance(got, tuple):
-                got = (got,)
-            return got
+        pytest_args += ['--pyargs'] + list(tests)
 
-        # Evaluate function to be tested
-        got = eval_func_at_params(self.func)
+        try:
+            code = pytest.main(pytest_args)
+        except SystemExit as exc:
+            code = exc.code
 
-        # Grab the correct results
-        if self.result_columns is not None:
-            # Correct results passed in with the data
-            wanted = tuple([data[:,icol] for icol in self.result_columns])
+        return (code == 0)
+
+
+class _TestPythranFunc:
+    '''
+    These are situations that can be tested in our pythran tests:
+    - A function with multiple array arguments and then
+      other positional and keyword arguments.
+    - A function with array-like keywords (e.g. `def somefunc(x0, x1=None)`.
+    Note: list/tuple input is not yet tested!
+
+    `self.arguments`: A dictionary which key is the index of the argument,
+                      value is tuple(array value, all supported dtypes)
+    `self.partialfunc`: A function used to freeze some non-array argument
+                        that of no interests in the original function
+    '''
+    ALL_INTEGER = [np.int8, np.int16, np.int32, np.int64, np.intc, np.intp]
+    ALL_FLOAT = [np.float32, np.float64]
+    ALL_COMPLEX = [np.complex64, np.complex128]
+
+    def setup_method(self):
+        self.arguments = {}
+        self.partialfunc = None
+        self.expected = None
+
+    def get_optional_args(self, func):
+        # get optional arguments with its default value,
+        # used for testing keywords
+        signature = inspect.signature(func)
+        optional_args = {}
+        for k, v in signature.parameters.items():
+            if v.default is not inspect.Parameter.empty:
+                optional_args[k] = v.default
+        return optional_args
+
+    def get_max_dtype_list_length(self):
+        # get the max supported dtypes list length in all arguments
+        max_len = 0
+        for arg_idx in self.arguments:
+            cur_len = len(self.arguments[arg_idx][1])
+            if cur_len > max_len:
+                max_len = cur_len
+        return max_len
+
+    def get_dtype(self, dtype_list, dtype_idx):
+        # get the dtype from dtype_list via index
+        # if the index is out of range, then return the last dtype
+        if dtype_idx > len(dtype_list)-1:
+            return dtype_list[-1]
         else:
-            # Function producing correct results passed in
-            skip_mask = None
-            if self.nan_ok and len(got) == 1:
-                # Don't spend time evaluating what doesn't need to be evaluated
-                skip_mask = np.isnan(got[0])
-            wanted = eval_func_at_params(self.result_func, skip_mask=skip_mask)
+            return dtype_list[dtype_idx]
 
-        # Check the validity of each output returned
-        assert_(len(got) == len(wanted))
+    def test_all_dtypes(self):
+        for type_idx in range(self.get_max_dtype_list_length()):
+            args_array = []
+            for arg_idx in self.arguments:
+                new_dtype = self.get_dtype(self.arguments[arg_idx][1],
+                                           type_idx)
+                args_array.append(self.arguments[arg_idx][0].astype(new_dtype))
+            self.pythranfunc(*args_array)
 
-        for output_num, (x, y) in enumerate(zip(got, wanted)):
-            if np.issubdtype(x.dtype, np.complexfloating) or self.ignore_inf_sign:
-                pinf_x = np.isinf(x)
-                pinf_y = np.isinf(y)
-                minf_x = np.isinf(x)
-                minf_y = np.isinf(y)
-            else:
-                pinf_x = np.isposinf(x)
-                pinf_y = np.isposinf(y)
-                minf_x = np.isneginf(x)
-                minf_y = np.isneginf(y)
-            nan_x = np.isnan(x)
-            nan_y = np.isnan(y)
+    def test_views(self):
+        args_array = []
+        for arg_idx in self.arguments:
+            args_array.append(self.arguments[arg_idx][0][::-1][::-1])
+        self.pythranfunc(*args_array)
 
-            with np.errstate(all='ignore'):
-                abs_y = np.absolute(y)
-                abs_y[~np.isfinite(abs_y)] = 0
-                diff = np.absolute(x - y)
-                diff[~np.isfinite(diff)] = 0
+    def test_strided(self):
+        args_array = []
+        for arg_idx in self.arguments:
+            args_array.append(np.repeat(self.arguments[arg_idx][0],
+                                        2, axis=0)[::2])
+        self.pythranfunc(*args_array)
 
-                rdiff = diff / np.absolute(y)
-                rdiff[~np.isfinite(rdiff)] = 0
 
-            tol_mask = (diff <= atol + rtol*abs_y)
-            pinf_mask = (pinf_x == pinf_y)
-            minf_mask = (minf_x == minf_y)
+def _pytest_has_xdist():
+    """
+    Check if the pytest-xdist plugin is installed, providing parallel tests
+    """
+    # Check xdist exists without importing, otherwise pytests emits warnings
+    from importlib.util import find_spec
+    return find_spec('xdist') is not None
 
-            nan_mask = (nan_x == nan_y)
 
-            bad_j = ~(tol_mask & pinf_mask & minf_mask & nan_mask)
+def check_free_memory(free_mb):
+    """
+    Check *free_mb* of memory is available, otherwise do pytest.skip
+    """
+    import pytest
 
-            point_count = bad_j.size
-            if self.nan_ok:
-                bad_j &= ~nan_x
-                bad_j &= ~nan_y
-                point_count -= (nan_x | nan_y).sum()
+    try:
+        mem_free = _parse_size(os.environ['SCIPY_AVAILABLE_MEM'])
+        msg = '{} MB memory required, but environment SCIPY_AVAILABLE_MEM={}'.format(
+            free_mb, os.environ['SCIPY_AVAILABLE_MEM'])
+    except KeyError:
+        mem_free = _get_mem_available()
+        if mem_free is None:
+            pytest.skip("Could not determine available memory; set SCIPY_AVAILABLE_MEM "
+                        "variable to free memory in MB to run the test.")
+        msg = f'{free_mb} MB memory required, but {mem_free/1e6} MB available'
 
-            if not self.distinguish_nan_and_inf and not self.nan_ok:
-                # If nan's are okay we've already covered all these cases
-                inf_x = np.isinf(x)
-                inf_y = np.isinf(y)
-                both_nonfinite = (inf_x & nan_y) | (nan_x & inf_y)
-                bad_j &= ~both_nonfinite
-                point_count -= both_nonfinite.sum()
+    if mem_free < free_mb * 1e6:
+        pytest.skip(msg)
 
-            if np.any(bad_j):
-                # Some bad results: inform what, where, and how bad
-                msg = [""]
-                msg.append(f"Max |adiff|: {diff[bad_j].max():g}")
-                msg.append(f"Max |rdiff|: {rdiff[bad_j].max():g}")
-                msg.append("Bad results (%d out of %d) for the following points "
-                           "(in output %d):"
-                           % (np.sum(bad_j), point_count, output_num,))
-                for j in np.nonzero(bad_j)[0]:
-                    j = int(j)
-                    def fmt(x):
-                        return '%30s' % np.array2string(x[j], precision=18)
-                    a = "  ".join(map(fmt, params))
-                    b = "  ".join(map(fmt, got))
-                    c = "  ".join(map(fmt, wanted))
-                    d = fmt(rdiff)
-                    msg.append(f"{a} => {b} != {c}  (rdiff {d})")
-                assert_(False, "\n".join(msg))
 
-    def __repr__(self):
-        """Pretty-printing"""
-        if np.any(list(map(np.iscomplexobj, self.param_columns))):
-            is_complex = " (complex)"
+def _parse_size(size_str):
+    suffixes = {'': 1e6,
+                'b': 1.0,
+                'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12,
+                'kb': 1e3, 'Mb': 1e6, 'Gb': 1e9, 'Tb': 1e12,
+                'kib': 1024.0, 'Mib': 1024.0**2, 'Gib': 1024.0**3, 'Tib': 1024.0**4}
+    m = re.match(r'^\s*(\d+)\s*({})\s*$'.format('|'.join(suffixes.keys())),
+                 size_str,
+                 re.I)
+    if not m or m.group(2) not in suffixes:
+        raise ValueError("Invalid size string")
+
+    return float(m.group(1)) * suffixes[m.group(2)]
+
+
+def _get_mem_available():
+    """
+    Get information about memory available, not counting swap.
+    """
+    try:
+        import psutil
+        return psutil.virtual_memory().available
+    except (ImportError, AttributeError):
+        pass
+
+    if sys.platform.startswith('linux'):
+        info = {}
+        with open('/proc/meminfo') as f:
+            for line in f:
+                p = line.split()
+                info[p[0].strip(':').lower()] = float(p[1]) * 1e3
+
+        if 'memavailable' in info:
+            # Linux >= 3.14
+            return info['memavailable']
         else:
-            is_complex = ""
-        if self.dataname:
-            return (f"<Data for {self.func.__name__}{is_complex}: "
-                    f"{os.path.basename(self.dataname)}>")
-        else:
-            return f"<Data for {self.func.__name__}{is_complex}>"
+            return info['memfree'] + info['cached']
+
+    return None
+
+def _test_cython_extension(tmp_path, srcdir):
+    """
+    Helper function to test building and importing Cython modules that
+    make use of the Cython APIs for BLAS, LAPACK, optimize, and special.
+    """
+    import pytest
+    try:
+        subprocess.check_call(["meson", "--version"])
+    except FileNotFoundError:
+        pytest.skip("No usable 'meson' found")
+
+    # Make safe for being called by multiple threads within one test
+    tmp_path = tmp_path / str(threading.get_ident())
+
+    # build the examples in a temporary directory
+    mod_name = os.path.split(srcdir)[1]
+    shutil.copytree(srcdir, tmp_path / mod_name)
+    build_dir = tmp_path / mod_name / 'tests' / '_cython_examples'
+    target_dir = build_dir / 'build'
+    os.makedirs(target_dir, exist_ok=True)
+
+    # Ensure we use the correct Python interpreter even when `meson` is
+    # installed in a different Python environment (see numpy#24956)
+    native_file = str(build_dir / 'interpreter-native-file.ini')
+    with open(native_file, 'w') as f:
+        f.write("[binaries]\n")
+        f.write(f"python = '{sys.executable}'")
+
+    if sys.platform == "win32":
+        subprocess.check_call(["meson", "setup",
+                               "--buildtype=release",
+                               "--native-file", native_file,
+                               "--vsenv", str(build_dir)],
+                              cwd=target_dir,
+                              )
+    else:
+        subprocess.check_call(["meson", "setup",
+                               "--native-file", native_file, str(build_dir)],
+                              cwd=target_dir
+                              )
+    subprocess.check_call(["meson", "compile", "-vv"], cwd=target_dir)
+
+    # import without adding the directory to sys.path
+    suffix = sysconfig.get_config_var('EXT_SUFFIX')
+
+    def load(modname):
+        so = (target_dir / modname).with_suffix(suffix)
+        spec = spec_from_file_location(modname, so)
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    # test that the module can be imported
+    return load("extending"), load("extending_cpp")
+
+
+def _run_concurrent_barrier(n_workers, fn, *args, **kwargs):
+    """
+    Run a given function concurrently across a given number of threads.
+
+    This is equivalent to using a ThreadPoolExecutor, but using the threading
+    primitives instead. This function ensures that the closure passed by
+    parameter gets called concurrently by setting up a barrier before it gets
+    called before any of the threads.
+
+    Arguments
+    ---------
+    n_workers: int
+        Number of concurrent threads to spawn.
+    fn: callable
+        Function closure to execute concurrently. Its first argument will
+        be the thread id.
+    *args: tuple
+        Variable number of positional arguments to pass to the function.
+    **kwargs: dict
+        Keyword arguments to pass to the function.
+    """
+    barrier = threading.Barrier(n_workers)
+
+    def closure(i, *args, **kwargs):
+        barrier.wait()
+        fn(i, *args, **kwargs)
+
+    workers = []
+    for i in range(0, n_workers):
+        workers.append(threading.Thread(
+            target=closure,
+            args=(i,) + args, kwargs=kwargs))
+
+    for worker in workers:
+        worker.start()
+
+    for worker in workers:
+        worker.join()
