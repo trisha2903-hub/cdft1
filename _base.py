@@ -1,307 +1,193 @@
-"""Base class for ensemble-based estimators."""
+"""
+Common code for all metrics.
+
+"""
 
 # Authors: The scikit-learn developers
 # SPDX-License-Identifier: BSD-3-Clause
 
-from abc import ABCMeta, abstractmethod
+from itertools import combinations
 
 import numpy as np
-from joblib import effective_n_jobs
 
-from ..base import BaseEstimator, MetaEstimatorMixin, clone, is_classifier, is_regressor
-from ..utils import Bunch, check_random_state
-from ..utils._tags import get_tags
-from ..utils._user_interface import _print_elapsed_time
-from ..utils.metadata_routing import _routing_enabled
-from ..utils.metaestimators import _BaseComposition
+from ..utils import check_array, check_consistent_length
+from ..utils.multiclass import type_of_target
 
 
-def _fit_single_estimator(
-    estimator, X, y, fit_params, message_clsname=None, message=None
-):
-    """Private function used to fit an estimator within a job."""
-    # TODO(SLEP6): remove if-condition for unrouted sample_weight when metadata
-    # routing can't be disabled.
-    if not _routing_enabled() and "sample_weight" in fit_params:
-        try:
-            with _print_elapsed_time(message_clsname, message):
-                estimator.fit(X, y, sample_weight=fit_params["sample_weight"])
-        except TypeError as exc:
-            if "unexpected keyword argument 'sample_weight'" in str(exc):
-                raise TypeError(
-                    "Underlying estimator {} does not support sample weights.".format(
-                        estimator.__class__.__name__
-                    )
-                ) from exc
-            raise
-    else:
-        with _print_elapsed_time(message_clsname, message):
-            estimator.fit(X, y, **fit_params)
-    return estimator
-
-
-def _set_random_states(estimator, random_state=None):
-    """Set fixed random_state parameters for an estimator.
-
-    Finds all parameters ending ``random_state`` and sets them to integers
-    derived from ``random_state``.
+def _average_binary_score(binary_metric, y_true, y_score, average, sample_weight=None):
+    """Average a binary metric for multilabel classification.
 
     Parameters
     ----------
-    estimator : estimator supporting get/set_params
-        Estimator with potential randomness managed by random_state
-        parameters.
+    y_true : array, shape = [n_samples] or [n_samples, n_classes]
+        True binary labels in binary label indicators.
 
-    random_state : int, RandomState instance or None, default=None
-        Pseudo-random number generator to control the generation of the random
-        integers. Pass an int for reproducible output across multiple function
-        calls.
-        See :term:`Glossary <random_state>`.
+    y_score : array, shape = [n_samples] or [n_samples, n_classes]
+        Target scores, can either be probability estimates of the positive
+        class, confidence values, or binary decisions.
 
-    Notes
-    -----
-    This does not necessarily set *all* ``random_state`` attributes that
-    control an estimator's randomness, only those accessible through
-    ``estimator.get_params()``.  ``random_state``s not controlled include
-    those belonging to:
+    average : {None, 'micro', 'macro', 'samples', 'weighted'}, default='macro'
+        If ``None``, the scores for each class are returned. Otherwise,
+        this determines the type of averaging performed on the data:
 
-        * cross-validation splitters
-        * ``scipy.stats`` rvs
+        ``'micro'``:
+            Calculate metrics globally by considering each element of the label
+            indicator matrix as a label.
+        ``'macro'``:
+            Calculate metrics for each label, and find their unweighted
+            mean.  This does not take label imbalance into account.
+        ``'weighted'``:
+            Calculate metrics for each label, and find their average, weighted
+            by support (the number of true instances for each label).
+        ``'samples'``:
+            Calculate metrics for each instance, and find their average.
+
+        Will be ignored when ``y_true`` is binary.
+
+    sample_weight : array-like of shape (n_samples,), default=None
+        Sample weights.
+
+    binary_metric : callable, returns shape [n_classes]
+        The binary metric function to use.
+
+    Returns
+    -------
+    score : float or array of shape [n_classes]
+        If not ``None``, average the score, else return the score for each
+        classes.
+
     """
-    random_state = check_random_state(random_state)
-    to_set = {}
-    for key in sorted(estimator.get_params(deep=True)):
-        if key == "random_state" or key.endswith("__random_state"):
-            to_set[key] = random_state.randint(np.iinfo(np.int32).max)
+    average_options = (None, "micro", "macro", "weighted", "samples")
+    if average not in average_options:
+        raise ValueError("average has to be one of {0}".format(average_options))
 
-    if to_set:
-        estimator.set_params(**to_set)
+    y_type = type_of_target(y_true)
+    if y_type not in ("binary", "multilabel-indicator"):
+        raise ValueError("{0} format is not supported".format(y_type))
 
+    if y_type == "binary":
+        return binary_metric(y_true, y_score, sample_weight=sample_weight)
 
-class BaseEnsemble(MetaEstimatorMixin, BaseEstimator, metaclass=ABCMeta):
-    """Base class for all ensemble classes.
+    check_consistent_length(y_true, y_score, sample_weight)
+    y_true = check_array(y_true)
+    y_score = check_array(y_score)
 
-    Warning: This class should not be used directly. Use derived classes
-    instead.
+    not_average_axis = 1
+    score_weight = sample_weight
+    average_weight = None
 
-    Parameters
-    ----------
-    estimator : object
-        The base estimator from which the ensemble is built.
+    if average == "micro":
+        if score_weight is not None:
+            score_weight = np.repeat(score_weight, y_true.shape[1])
+        y_true = y_true.ravel()
+        y_score = y_score.ravel()
 
-    n_estimators : int, default=10
-        The number of estimators in the ensemble.
-
-    estimator_params : list of str, default=tuple()
-        The list of attributes to use as parameters when instantiating a
-        new base estimator. If none are given, default parameters are used.
-
-    Attributes
-    ----------
-    estimator_ : estimator
-        The base estimator from which the ensemble is grown.
-
-    estimators_ : list of estimators
-        The collection of fitted base estimators.
-    """
-
-    @abstractmethod
-    def __init__(
-        self,
-        estimator=None,
-        *,
-        n_estimators=10,
-        estimator_params=tuple(),
-    ):
-        # Set parameters
-        self.estimator = estimator
-        self.n_estimators = n_estimators
-        self.estimator_params = estimator_params
-
-        # Don't instantiate estimators now! Parameters of estimator might
-        # still change. Eg., when grid-searching with the nested object syntax.
-        # self.estimators_ needs to be filled by the derived classes in fit.
-
-    def _validate_estimator(self, default=None):
-        """Check the base estimator.
-
-        Sets the `estimator_` attributes.
-        """
-        if self.estimator is not None:
-            self.estimator_ = self.estimator
+    elif average == "weighted":
+        if score_weight is not None:
+            average_weight = np.sum(
+                np.multiply(y_true, np.reshape(score_weight, (-1, 1))), axis=0
+            )
         else:
-            self.estimator_ = default
+            average_weight = np.sum(y_true, axis=0)
+        if np.isclose(average_weight.sum(), 0.0):
+            return 0
 
-    def _make_estimator(self, append=True, random_state=None):
-        """Make and configure a copy of the `estimator_` attribute.
+    elif average == "samples":
+        # swap average_weight <-> score_weight
+        average_weight = score_weight
+        score_weight = None
+        not_average_axis = 0
 
-        Warning: This method should be used to properly instantiate new
-        sub-estimators.
-        """
-        estimator = clone(self.estimator_)
-        estimator.set_params(**{p: getattr(self, p) for p in self.estimator_params})
+    if y_true.ndim == 1:
+        y_true = y_true.reshape((-1, 1))
 
-        if random_state is not None:
-            _set_random_states(estimator, random_state)
+    if y_score.ndim == 1:
+        y_score = y_score.reshape((-1, 1))
 
-        if append:
-            self.estimators_.append(estimator)
+    n_classes = y_score.shape[not_average_axis]
+    score = np.zeros((n_classes,))
+    for c in range(n_classes):
+        y_true_c = y_true.take([c], axis=not_average_axis).ravel()
+        y_score_c = y_score.take([c], axis=not_average_axis).ravel()
+        score[c] = binary_metric(y_true_c, y_score_c, sample_weight=score_weight)
 
-        return estimator
-
-    def __len__(self):
-        """Return the number of estimators in the ensemble."""
-        return len(self.estimators_)
-
-    def __getitem__(self, index):
-        """Return the index'th estimator in the ensemble."""
-        return self.estimators_[index]
-
-    def __iter__(self):
-        """Return iterator over estimators in the ensemble."""
-        return iter(self.estimators_)
-
-
-def _partition_estimators(n_estimators, n_jobs):
-    """Private function used to partition estimators between jobs."""
-    # Compute the number of jobs
-    n_jobs = min(effective_n_jobs(n_jobs), n_estimators)
-
-    # Partition estimators between jobs
-    n_estimators_per_job = np.full(n_jobs, n_estimators // n_jobs, dtype=int)
-    n_estimators_per_job[: n_estimators % n_jobs] += 1
-    starts = np.cumsum(n_estimators_per_job)
-
-    return n_jobs, n_estimators_per_job.tolist(), [0] + starts.tolist()
+    # Average the results
+    if average is not None:
+        if average_weight is not None:
+            # Scores with 0 weights are forced to be 0, preventing the average
+            # score from being affected by 0-weighted NaN elements.
+            average_weight = np.asarray(average_weight)
+            score[average_weight == 0] = 0
+        return float(np.average(score, weights=average_weight))
+    else:
+        return score
 
 
-class _BaseHeterogeneousEnsemble(
-    MetaEstimatorMixin, _BaseComposition, metaclass=ABCMeta
-):
-    """Base class for heterogeneous ensemble of learners.
+def _average_multiclass_ovo_score(binary_metric, y_true, y_score, average="macro"):
+    """Average one-versus-one scores for multiclass classification.
+
+    Uses the binary metric for one-vs-one multiclass classification,
+    where the score is computed according to the Hand & Till (2001) algorithm.
 
     Parameters
     ----------
-    estimators : list of (str, estimator) tuples
-        The ensemble of estimators to use in the ensemble. Each element of the
-        list is defined as a tuple of string (i.e. name of the estimator) and
-        an estimator instance. An estimator can be set to `'drop'` using
-        `set_params`.
+    binary_metric : callable
+        The binary metric function to use that accepts the following as input:
+            y_true_target : array, shape = [n_samples_target]
+                Some sub-array of y_true for a pair of classes designated
+                positive and negative in the one-vs-one scheme.
+            y_score_target : array, shape = [n_samples_target]
+                Scores corresponding to the probability estimates
+                of a sample belonging to the designated positive class label
 
-    Attributes
-    ----------
-    estimators_ : list of estimators
-        The elements of the estimators parameter, having been fitted on the
-        training data. If an estimator has been set to `'drop'`, it will not
-        appear in `estimators_`.
+    y_true : array-like of shape (n_samples,)
+        True multiclass labels.
+
+    y_score : array-like of shape (n_samples, n_classes)
+        Target scores corresponding to probability estimates of a sample
+        belonging to a particular class.
+
+    average : {'macro', 'weighted'}, default='macro'
+        Determines the type of averaging performed on the pairwise binary
+        metric scores:
+        ``'macro'``:
+            Calculate metrics for each label, and find their unweighted
+            mean. This does not take label imbalance into account. Classes
+            are assumed to be uniformly distributed.
+        ``'weighted'``:
+            Calculate metrics for each label, taking into account the
+            prevalence of the classes.
+
+    Returns
+    -------
+    score : float
+        Average of the pairwise binary metric scores.
     """
+    check_consistent_length(y_true, y_score)
 
-    @property
-    def named_estimators(self):
-        """Dictionary to access any fitted sub-estimators by name.
+    y_true_unique = np.unique(y_true)
+    n_classes = y_true_unique.shape[0]
+    n_pairs = n_classes * (n_classes - 1) // 2
+    pair_scores = np.empty(n_pairs)
 
-        Returns
-        -------
-        :class:`~sklearn.utils.Bunch`
-        """
-        return Bunch(**dict(self.estimators))
+    is_weighted = average == "weighted"
+    prevalence = np.empty(n_pairs) if is_weighted else None
 
-    @abstractmethod
-    def __init__(self, estimators):
-        self.estimators = estimators
+    # Compute scores treating a as positive class and b as negative class,
+    # then b as positive class and a as negative class
+    for ix, (a, b) in enumerate(combinations(y_true_unique, 2)):
+        a_mask = y_true == a
+        b_mask = y_true == b
+        ab_mask = np.logical_or(a_mask, b_mask)
 
-    def _validate_estimators(self):
-        if len(self.estimators) == 0 or not all(
-            isinstance(item, (tuple, list)) and isinstance(item[0], str)
-            for item in self.estimators
-        ):
-            raise ValueError(
-                "Invalid 'estimators' attribute, 'estimators' should be a "
-                "non-empty list of (string, estimator) tuples."
-            )
-        names, estimators = zip(*self.estimators)
-        # defined by MetaEstimatorMixin
-        self._validate_names(names)
+        if is_weighted:
+            prevalence[ix] = np.average(ab_mask)
 
-        has_estimator = any(est != "drop" for est in estimators)
-        if not has_estimator:
-            raise ValueError(
-                "All estimators are dropped. At least one is required "
-                "to be an estimator."
-            )
+        a_true = a_mask[ab_mask]
+        b_true = b_mask[ab_mask]
 
-        is_estimator_type = is_classifier if is_classifier(self) else is_regressor
+        a_true_score = binary_metric(a_true, y_score[ab_mask, a])
+        b_true_score = binary_metric(b_true, y_score[ab_mask, b])
+        pair_scores[ix] = (a_true_score + b_true_score) / 2
 
-        for est in estimators:
-            if est != "drop" and not is_estimator_type(est):
-                raise ValueError(
-                    "The estimator {} should be a {}.".format(
-                        est.__class__.__name__, is_estimator_type.__name__[3:]
-                    )
-                )
-
-        return names, estimators
-
-    def set_params(self, **params):
-        """
-        Set the parameters of an estimator from the ensemble.
-
-        Valid parameter keys can be listed with `get_params()`. Note that you
-        can directly set the parameters of the estimators contained in
-        `estimators`.
-
-        Parameters
-        ----------
-        **params : keyword arguments
-            Specific parameters using e.g.
-            `set_params(parameter_name=new_value)`. In addition, to setting the
-            parameters of the estimator, the individual estimator of the
-            estimators can also be set, or can be removed by setting them to
-            'drop'.
-
-        Returns
-        -------
-        self : object
-            Estimator instance.
-        """
-        super()._set_params("estimators", **params)
-        return self
-
-    def get_params(self, deep=True):
-        """
-        Get the parameters of an estimator from the ensemble.
-
-        Returns the parameters given in the constructor as well as the
-        estimators contained within the `estimators` parameter.
-
-        Parameters
-        ----------
-        deep : bool, default=True
-            Setting it to True gets the various estimators and the parameters
-            of the estimators as well.
-
-        Returns
-        -------
-        params : dict
-            Parameter and estimator names mapped to their values or parameter
-            names mapped to their values.
-        """
-        return super()._get_params("estimators", deep=deep)
-
-    def __sklearn_tags__(self):
-        tags = super().__sklearn_tags__()
-        try:
-            tags.input_tags.allow_nan = all(
-                get_tags(est[1]).input_tags.allow_nan if est[1] != "drop" else True
-                for est in self.estimators
-            )
-            tags.input_tags.sparse = all(
-                get_tags(est[1]).input_tags.sparse if est[1] != "drop" else True
-                for est in self.estimators
-            )
-        except Exception:
-            # If `estimators` does not comply with our API (list of tuples) then it will
-            # fail. In this case, we assume that `allow_nan` and `sparse` are False but
-            # the parameter validation will raise an error during `fit`.
-            pass  # pragma: no cover
-        return tags
+    return np.average(pair_scores, weights=prevalence)
